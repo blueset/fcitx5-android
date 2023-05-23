@@ -21,7 +21,7 @@ class SymbolKey(
 ) : KeyDef(
     Appearance.Text(
         displayText = symbol,
-        textSize = 23f,
+        textSize = 27f,
         percentWidth = percentWidth,
         variant = variant
     ),
@@ -43,7 +43,7 @@ class AlphabetKey(
     Appearance.AltText(
         displayText = character,
         altText = punctuation,
-        textSize = 23f,
+        textSize = 27f,
         variant = variant
     ),
     setOf(
@@ -65,7 +65,7 @@ class AlphabetDigitKey(
     Appearance.AltText(
         displayText = character,
         altText = altText,
-        textSize = 23f
+        textSize = 27f
     ),
     setOf(
         Behavior.Press(KeyAction.FcitxKeyAction(character)),
@@ -154,7 +154,7 @@ class CommaKey(
 ) : KeyDef(
     Appearance.Text(
         displayText = ",",
-        textSize = 23f,
+        textSize = 27f,
         percentWidth = percentWidth,
         variant = variant
     ),

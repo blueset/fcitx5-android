@@ -240,7 +240,7 @@ class AltTextKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.AltText)
         isClickable = false
         isFocusable = false
         // TODO hardcoded alt text size
-        textSize = 10.7f
+        textSize = 13f
         setTypeface(typeface, Typeface.BOLD)
         text = def.altText
         textDirection = View.TEXT_DIRECTION_FIRST_STRONG_LTR

@@ -36,13 +36,13 @@ class PickerPageUi(override val ctx: Context, val theme: Theme, private val dens
         val showBackspace: Boolean
     ) {
         // symbol: 10/10/8, backspace on bottom right
-        High(28, 10, 3, 19f, true),
+        High(28, 10, 3, 23f, true),
 
         // emoji: 7/7/6, backspace on bottom right
-        Medium(20, 7, 3, 23.7f, true),
+        Medium(20, 7, 3, 27f, true),
 
         // emoticon: 4/4/4, no backspace
-        Low(12, 4, 3, 19f, false)
+        Low(12, 4, 3, 23f, false)
     }
 
     companion object {
