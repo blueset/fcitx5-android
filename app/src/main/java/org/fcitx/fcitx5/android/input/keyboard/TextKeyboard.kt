@@ -27,28 +27,63 @@ class TextKeyboard(
         const val Name = "Text"
 
         val Layout: List<List<KeyDef>> = listOf(
+//            listOf(
+//                AlphabetDigitKey("Q", 1),
+//                AlphabetDigitKey("W", 2),
+//                AlphabetDigitKey("E", 3),
+//                AlphabetDigitKey("R", 4),
+//                AlphabetDigitKey("T", 5),
+//                AlphabetDigitKey("Y", 6),
+//                AlphabetDigitKey("U", 7),
+//                AlphabetDigitKey("I", 8),
+//                AlphabetDigitKey("O", 9),
+//                AlphabetDigitKey("P", 0)
+//            ),
+//            listOf(
+//                AlphabetKey("A", "@"),
+//                AlphabetKey("S", "*"),
+//                AlphabetKey("D", "+"),
+//                AlphabetKey("F", "-"),
+//                AlphabetKey("G", "="),
+//                AlphabetKey("H", "/"),
+//                AlphabetKey("J", "#"),
+//                AlphabetKey("K", "("),
+//                AlphabetKey("L", ")")
+//            ),
+//            listOf(
+//                CapsKey(),
+//                AlphabetKey("Z", "'"),
+//                AlphabetKey("X", ":"),
+//                AlphabetKey("C", "\""),
+//                AlphabetKey("V", "?"),
+//                AlphabetKey("B", "!"),
+//                AlphabetKey("N", "~"),
+//                AlphabetKey("M", "\\"),
+//                BackspaceKey()
+//            ),
             listOf(
                 AlphabetDigitKey("Q", 1),
                 AlphabetDigitKey("W", 2),
-                AlphabetDigitKey("E", 3),
-                AlphabetDigitKey("R", 4),
-                AlphabetDigitKey("T", 5),
-                AlphabetDigitKey("Y", 6),
-                AlphabetDigitKey("U", 7),
-                AlphabetDigitKey("I", 8),
-                AlphabetDigitKey("O", 9),
-                AlphabetDigitKey("P", 0)
+                AlphabetDigitKey("F", 3),
+                AlphabetDigitKey("P", 4),
+                AlphabetDigitKey("G", 5),
+                AlphabetDigitKey("J", 6),
+                AlphabetDigitKey("L", 7),
+                AlphabetDigitKey("U", 8),
+                AlphabetDigitKey("Y", 9),
+                AlphabetDigitKey(";", 0)
             ),
             listOf(
                 AlphabetKey("A", "@"),
-                AlphabetKey("S", "*"),
-                AlphabetKey("D", "+"),
-                AlphabetKey("F", "-"),
-                AlphabetKey("G", "="),
+                AlphabetKey("R", "*"),
+                AlphabetKey("S", "+"),
+                AlphabetKey("T", "-"),
+                AlphabetKey("D", "="),
                 AlphabetKey("H", "/"),
-                AlphabetKey("J", "#"),
-                AlphabetKey("K", "("),
-                AlphabetKey("L", ")")
+                AlphabetKey("N", "#"),
+                AlphabetKey("E", "("),
+                AlphabetKey("I", ")"),
+                AlphabetKey("O", "&"),
             ),
             listOf(
                 CapsKey(),
@@ -57,7 +92,7 @@ class TextKeyboard(
                 AlphabetKey("C", "\""),
                 AlphabetKey("V", "?"),
                 AlphabetKey("B", "!"),
-                AlphabetKey("N", "~"),
+                AlphabetKey("K", "~"),
                 AlphabetKey("M", "\\"),
                 BackspaceKey()
             ),
