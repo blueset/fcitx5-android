@@ -221,6 +221,7 @@ open class TextKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.Text) 
                 Variant.Accent -> theme.accentKeyTextColor
             }
         )
+        fontFeatureSettings = "palt"
     }
 
     init {
@@ -250,6 +251,7 @@ class AltTextKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.AltText)
                 Variant.Accent -> theme.accentKeyTextColor
             }
         )
+        fontFeatureSettings = "palt"
     }
 
     init {
