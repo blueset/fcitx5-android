@@ -52,7 +52,7 @@ abstract class BaseKeyboard(
     var popupActionListener: PopupActionListener? = null
 
     private val selectionSwipeThreshold = dp(10f)
-    private val inputSwipeThreshold = dp(36f)
+    private val inputSwipeThreshold = dp(72f)
 
     // a rather large threshold effectively disables swipe of the direction
     private val disabledSwipeThreshold = dp(800f)
