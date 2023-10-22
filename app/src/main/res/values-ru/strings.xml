@@ -110,7 +110,7 @@
     <string name="key_radius">Радиус клавиш</string>
     <string name="key_horizontal_margin">Горизонтальное поле клавиш</string>
     <string name="key_vertical_margin">Вертикальное поле клавиш</string>
-    <string name="configure_theme">Настроить тему</string>
+    <string name="configure">Настроить</string>
     <string name="choose_image">Выбрать изображение…</string>
     <string name="dark_keys">Темные клавиши</string>
     <string name="recrop_image">Повторное кадрирование изображения</string>
@@ -139,14 +139,13 @@
     <string name="exception_theme_name_clash">Название темы конфликтует со встроенными темами</string>
     <string name="exception_theme_src_image">Не удалось сохранить исходное изображение фона темы</string>
     <string name="exception_theme_cropped_image">Не удалось сохранить обрезанное изображение фона темы</string>
-    <string name="follow_system_day_night_theme">Следовать теме дневного света системы</string>
+    <string name="follow_system_day_night_theme">Следовать системной теме «день-ночь»</string>
     <string name="follow_system_day_night_theme_summary">Переопределить выбор темы вручную</string>
     <string name="light_mode_theme">Светлая тема</string>
     <string name="dark_mode_theme">Темная тема</string>
     <string name="new_theme">Новая тема</string>
     <string name="skip">Пропустить</string>
     <string name="horizontal_candidate_growth">Растянуть кандидаты по горизонтали, чтобы заполнить оставшуюся ширину</string>
-    <string name="system_touch_sounds">Системные звуки касания при нажатии клавиш</string>
     <string name="none">Нет</string>
     <string name="theme_migrated">Тема перенесена в текущую версию</string>
     <string name="keep_keyboard_letters_uppercase">Сохранять буквы клавиатуры прописными</string>
@@ -213,8 +212,8 @@
     <string name="delete_theme_msg">Вы действительно хотите удалить тему \"%1$s\"?</string>
     <string name="capture_heap_dump">Захватить дамп кучи</string>
     <string name="plugins">Плагины</string>
-    <string name="loaded">Загружено</string>
-    <string name="failed">Не удалось</string>
+    <string name="plugins_loaded">Загружено</string>
+    <string name="plugins_failed">Не удалось</string>
     <string name="missing_plugin_descriptor">Отсутствует дескриптор плагина</string>
     <string name="invalid_plugin_descriptor">Неверный дескриптор плагина</string>
     <string name="missing_data_descriptor">Отсутствует дескриптор данных</string>
@@ -223,4 +222,19 @@
     <string name="path_conflict">Путь \"%1$s\" уже принадлежит %2$s</string>
     <string name="main_program">основная программа</string>
     <string name="edit_theme">Изменить тему</string>
-</resources>
+    <string name="show_voice_input_button">Показывать кнопку голосового ввода</string>
+    <string name="fcitx_daemon">Демон Fcitx</string>
+    <string name="restarting_fcitx">Перезапуск Fcitx</string>
+    <string name="plugin_needs_reload">Обнаружены изменения плагина, нажмите здесь, чтобы перезагрузить</string>
+    <string name="no_plugins">Нет доступных плагинов</string>
+    <string name="removed_n_items">Удаленный %1$d элемент(ы)</string>
+    <string name="whether_reset_switch_preference">Вы хотите сбросить этот параметр по умолчанию?</string>
+    <string name="enabled">Включено</string>
+    <string name="following_system_settings">Следовать системным настройкам</string>
+    <string name="button_sound">Звуковой эффект при нажатии клавиш</string>
+    <string name="button_sound_volume">Громкость звукового эффекта при нажатии клавиш</string>
+    <string name="clipboard_return_after_paste">Возврат в буфер обмена после вставки</string>
+    <string name="theme_message_follow_system_day_night_mode_enabled">Невозможно переключить тему вручную, пока включен режим «Следовать системному темному режиму».</string>
+    <string name="disable_it">Отключить это</string>
+    <string name="reset_keyboard_on_focus_change">Переключаться обратно на клавиатуру при смене фокуса</string>
+    </resources>

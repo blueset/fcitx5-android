@@ -2,7 +2,11 @@ package org.fcitx.fcitx5.android.data.prefs
 
 import android.content.SharedPreferences
 import android.os.Build
+import androidx.annotation.RequiresApi
+import androidx.core.content.edit
+import androidx.preference.PreferenceManager
 import org.fcitx.fcitx5.android.R
+import org.fcitx.fcitx5.android.data.InputFeedbacks.InputFeedbackMode
 import org.fcitx.fcitx5.android.input.candidates.HorizontalCandidateMode
 import org.fcitx.fcitx5.android.input.candidates.expanded.ExpandedCandidateStyle
 import org.fcitx.fcitx5.android.input.keyboard.SpaceLongPressBehavior
@@ -21,6 +25,7 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         val verboseLog = bool("verbose_log", false)
         val pid = int("pid", 0)
         val editorInfoInspector = bool("editor_info_inspector", false)
+        val needNotifications = bool("need_notifications", true)
     }
 
     inner class Advanced : ManagedPreferenceCategory(R.string.advanced, sharedPreferences) {
@@ -35,8 +40,23 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
     }
 
     inner class Keyboard : ManagedPreferenceCategory(R.string.keyboard, sharedPreferences) {
-        val buttonHapticFeedback =
-            switch(R.string.button_haptic_feedback, "button_haptic_feedback", true)
+        val hapticOnKeyPress =
+            list(
+                R.string.button_haptic_feedback,
+                "haptic_on_keypress",
+                InputFeedbackMode.FollowingSystem,
+                InputFeedbackMode,
+                listOf(
+                    InputFeedbackMode.FollowingSystem,
+                    InputFeedbackMode.Enabled,
+                    InputFeedbackMode.Disabled
+                ),
+                listOf(
+                    R.string.following_system_settings,
+                    R.string.enabled,
+                    R.string.disabled
+                )
+            )
         val buttonPressVibrationMilliseconds: ManagedPreference.PInt
         val buttonLongPressVibrationMilliseconds: ManagedPreference.PInt
 
@@ -53,7 +73,7 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
                 100,
                 "ms",
                 defaultLabel = R.string.system_default
-            ) { buttonHapticFeedback.getValue() }
+            ) { hapticOnKeyPress.getValue() != InputFeedbackMode.Disabled }
             buttonPressVibrationMilliseconds = primary
             buttonLongPressVibrationMilliseconds = secondary
         }
@@ -74,16 +94,44 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
                 255,
                 defaultLabel = R.string.system_default
             ) {
-                buttonHapticFeedback.getValue()
-                        && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                        && appContext.vibrator.hasAmplitudeControl()
+                (hapticOnKeyPress.getValue() != InputFeedbackMode.Disabled)
+                        // hide this if using default duration
+                        && (buttonPressVibrationMilliseconds.getValue() != 0 || buttonLongPressVibrationMilliseconds.getValue() != 0)
+                        && (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && appContext.vibrator.hasAmplitudeControl())
             }
             buttonPressVibrationAmplitude = primary
             buttonLongPressVibrationAmplitude = secondary
         }
 
-        val systemTouchSounds =
-            switch(R.string.system_touch_sounds, "system_touch_sounds", true)
+        val soundOnKeyPress = list(
+            R.string.button_sound,
+            "sound_on_keypress",
+            InputFeedbackMode.FollowingSystem,
+            InputFeedbackMode,
+            listOf(
+                InputFeedbackMode.FollowingSystem,
+                InputFeedbackMode.Enabled,
+                InputFeedbackMode.Disabled
+            ),
+            listOf(
+                R.string.following_system_settings,
+                R.string.enabled,
+                R.string.disabled
+            )
+        )
+        val soundOnKeyPressVolume = int(
+            R.string.button_sound_volume,
+            "button_sound_volume",
+            0,
+            0,
+            100,
+            "%",
+            defaultLabel = R.string.system_default
+        ) {
+            soundOnKeyPress.getValue() != InputFeedbackMode.Disabled
+        }
+        val focusChangeResetKeyboard =
+            switch(R.string.reset_keyboard_on_focus_change, "reset_keyboard_on_focus_change", true)
         val expandToolbarByDefault =
             switch(R.string.expand_toolbar_by_default, "expand_toolbar_by_default", false)
         val inlineSuggestions = switch(R.string.inline_suggestions, "inline_suggestions", true)
@@ -97,6 +145,8 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         )
         val showVoiceInputButton =
             switch(R.string.show_voice_input_button, "show_voice_input_button", false)
+        val expandKeypressArea =
+            switch(R.string.expand_keypress_area, "expand_keypress_area", false)
         val swipeSymbolDirection = list(
             R.string.swipe_symbol_behavior,
             "swipe_symbol_behavior",
@@ -273,6 +323,9 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             Int.MAX_VALUE,
             "s"
         ) { clipboardListening.getValue() && clipboardSuggestion.getValue() }
+        val clipboardReturnAfterPaste = switch(
+            R.string.clipboard_return_after_paste, "clipboard_return_after_paste", false
+        ) { clipboardListening.getValue() }
     }
 
     private val providers = mutableListOf<ManagedPreferenceProvider>()
@@ -300,6 +353,29 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
                 it.managedPreferences[key]?.fireChange()
             }
         }
+
+    @RequiresApi(Build.VERSION_CODES.N)
+    fun syncToDeviceEncryptedStorage() {
+        val ctx = appContext.createDeviceProtectedStorageContext()
+        val sp = PreferenceManager.getDefaultSharedPreferences(ctx)
+        sp.edit {
+            listOf(
+                internal.verboseLog,
+                internal.editorInfoInspector,
+                advanced.ignoreSystemCursor,
+                advanced.disableAnimation,
+                advanced.vivoKeypressWorkaround
+            ).forEach {
+                it.putValueTo(this@edit)
+            }
+            keyboard.managedPreferences.forEach {
+                it.value.putValueTo(this@edit)
+            }
+            clipboard.managedPreferences.forEach {
+                it.value.putValueTo(this@edit)
+            }
+        }
+    }
 
     companion object {
         private var instance: AppPrefs? = null

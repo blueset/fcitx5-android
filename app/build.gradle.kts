@@ -1,11 +1,11 @@
 @file:Suppress("UnstableApiUsage")
 
 plugins {
-    id("android-app-convention")
-    id("native-app-convention")
-    id("build-metadata")
-    id("data-descriptor")
-    id("fcitx-component")
+    id("org.fcitx.fcitx5.android.app-convention")
+    id("org.fcitx.fcitx5.android.native-app-convention")
+    id("org.fcitx.fcitx5.android.build-metadata")
+    id("org.fcitx.fcitx5.android.data-descriptor")
+    id("org.fcitx.fcitx5.android.fcitx-component")
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
@@ -28,18 +28,7 @@ android {
                     // android specific modules
                     "androidfrontend",
                     "androidkeyboard",
-                    // fcitx5-chinese-addons
-                    "pinyin",
-                    "scel2org5",
-                    "table",
-                    "chttrans",
-                    "fullwidth",
-                    "pinyinhelper",
-                    "punctuation",
-                    // fcitx5-lua
-                    "luaaddonloader",
-                    // fcitx5-unikey
-                    "unikey"
+                    "androidnotification"
                 )
             }
         }
@@ -66,6 +55,11 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
+    androidResources {
+        @Suppress("UnstableApiUsage")
+        generateLocaleConfig = true
+    }
 }
 
 kotlin {
@@ -79,7 +73,12 @@ aboutLibraries {
 }
 
 fcitxComponent {
-    installFcitx5Data = true
+    installLibraries = listOf(
+        "fcitx5",
+        "fcitx5-lua",
+        "libime",
+        "fcitx5-chinese-addons"
+    )
 }
 
 ksp {
@@ -89,6 +88,10 @@ ksp {
 dependencies {
     ksp(project(":codegen"))
     implementation(project(":lib:fcitx5"))
+    implementation(project(":lib:fcitx5-lua"))
+    implementation(project(":lib:libime"))
+    implementation(project(":lib:fcitx5-chinese-addons"))
+    implementation(project(":lib:common"))
     implementation(libs.kotlinx.coroutines)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.activity)
@@ -112,7 +115,6 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.room.paging)
     implementation(libs.androidx.viewpager2)
-    implementation(libs.konbini)
     implementation(libs.material)
     implementation(libs.arrow)
     implementation(libs.imagecropper)
@@ -134,4 +136,11 @@ dependencies {
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.androidx.lifecycle.testing)
     androidTestImplementation(libs.junit)
+}
+
+// remove Baseline Profile Installer or whatever it is...
+configurations {
+    all {
+        exclude(group = "androidx.profileinstaller", module = "profileinstaller")
+    }
 }

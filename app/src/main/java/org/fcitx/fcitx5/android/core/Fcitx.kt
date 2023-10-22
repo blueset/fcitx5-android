@@ -2,18 +2,22 @@ package org.fcitx.fcitx5.android.core
 
 import android.content.Context
 import androidx.annotation.Keep
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import org.fcitx.fcitx5.android.FcitxApplication
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.data.DataManager
 import org.fcitx.fcitx5.android.data.clipboard.ClipboardManager
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.utils.ImmutableGraph
 import org.fcitx.fcitx5.android.utils.Locales
+import org.fcitx.fcitx5.android.utils.appContext
+import org.fcitx.fcitx5.android.utils.toast
 import timber.log.Timber
 
 /**
@@ -164,6 +168,17 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         get() = lifecycleRegistry
 
     private companion object JNI {
+
+        /**
+         * called from native-lib
+         */
+        @Suppress("unused")
+        @JvmStatic
+        fun showToast(s: String) {
+            ContextCompat.getMainExecutor(appContext).execute {
+                appContext.toast(s)
+            }
+        }
 
         private val eventFlow_ =
             MutableSharedFlow<FcitxEvent<*>>(
@@ -335,11 +350,14 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         // will be called in fcitx main thread
         private fun onFirstRun() {
             Timber.i("onFirstRun")
-            getFcitxGlobalConfig()?.get("cfg")?.run {
-                get("Behavior")["PreeditEnabledByDefault"].value = "False"
+            getFcitxGlobalConfig()?.get("cfg")?.apply {
+                get("Behavior").apply {
+                    get("ShareInputState").value = "All"
+                    get("PreeditEnabledByDefault").value = "False"
+                }
                 setFcitxGlobalConfig(this)
             }
-            getFcitxAddonConfig("pinyin")?.get("cfg")?.run {
+            getFcitxAddonConfig("pinyin")?.get("cfg")?.apply {
                 get("PreeditInApplication").value = "False"
                 get("PreeditCursorPositionAtBeginning").value = "False"
                 get("QuickPhraseKey").value = ""
@@ -366,6 +384,7 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         override fun nativeStartup() {
             DataManager.sync()
             val locale = Locales.fcitxLocale
+            val dataDir = DataManager.dataDir.absolutePath
             val plugins = DataManager.getLoadedPlugins()
             val nativeLibDir = buildString {
                 append(context.applicationInfo.nativeLibraryDir)
@@ -375,16 +394,19 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
                 }
             }
             val extDomains = plugins.mapNotNull { it.domain }.toTypedArray()
-            Timber.d("""
+            Timber.d(
+                """
                Starting fcitx with:
                locale=$locale
+               dataDir=$dataDir
                nativeLibDir=$nativeLibDir
                extDomains=${extDomains.joinToString()}
-            """.trimIndent())
-            with(context) {
+            """.trimIndent()
+            )
+            with(FcitxApplication.getInstance().directBootAwareContext) {
                 startupFcitx(
                     locale,
-                    applicationInfo.dataDir,
+                    dataDir,
                     nativeLibDir,
                     (getExternalFilesDir(null) ?: filesDir).absolutePath,
                     (externalCacheDir ?: cacheDir).absolutePath,
@@ -407,7 +429,7 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
 
     })
 
-    private suspend fun <T> withFcitxContext(block: suspend () -> T): T =
+    private suspend inline fun <T> withFcitxContext(crossinline block: suspend () -> T): T =
         withContext(dispatcher) {
             block()
         }
@@ -431,7 +453,16 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         when (event) {
             is FcitxEvent.ReadyEvent -> lifecycleRegistry.postEvent(FcitxLifecycle.Event.ON_READY)
             is FcitxEvent.IMChangeEvent -> inputMethodEntryCached = event.data
-            is FcitxEvent.StatusAreaEvent -> statusAreaActionsCached = event.data
+            is FcitxEvent.StatusAreaEvent -> {
+                val (actions, im) = event.data
+                statusAreaActionsCached = actions
+                // Engine subMode update won't trigger IMChangeEvent, but usually updates StatusArea
+                if (im != inputMethodEntryCached) {
+                    inputMethodEntryCached = im
+                    // notify downstream consumers that engine subMode has changed
+                    eventFlow_.tryEmit(FcitxEvent.IMChangeEvent(im))
+                }
+            }
             is FcitxEvent.ClientPreeditEvent -> clientPreeditCached = event.data
             is FcitxEvent.InputPanelEvent -> inputPanelCached = event.data
             else -> {}
@@ -446,6 +477,9 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         registerFcitxEventHandler(::handleFcitxEvent)
         lifecycleRegistry.postEvent(FcitxLifecycle.Event.ON_START)
         ClipboardManager.addOnUpdateListener(onClipboardUpdate)
+        DataManager.addOnNextSyncedCallback {
+            FcitxPluginServices.connectAll()
+        }
         dispatcher.start()
     }
 
@@ -457,6 +491,7 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         lifecycleRegistry.postEvent(FcitxLifecycle.Event.ON_STOP)
         Timber.i("Fcitx stop()")
         ClipboardManager.removeOnUpdateListener(onClipboardUpdate)
+        FcitxPluginServices.disconnectAll()
         dispatcher.stop().let {
             if (it.isNotEmpty())
                 Timber.w("${it.size} job(s) didn't get a chance to run!")

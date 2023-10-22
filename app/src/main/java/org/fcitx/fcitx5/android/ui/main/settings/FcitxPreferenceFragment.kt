@@ -5,7 +5,6 @@ import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
-import androidx.preference.Preference
 import androidx.preference.isEmpty
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -14,10 +13,11 @@ import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.FcitxAPI
 import org.fcitx.fcitx5.android.core.RawConfig
 import org.fcitx.fcitx5.android.daemon.FcitxConnection
-import org.fcitx.fcitx5.android.daemon.launchOnFcitxReady
+import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.ui.common.PaddingPreferenceFragment
 import org.fcitx.fcitx5.android.ui.common.withLoadingDialog
 import org.fcitx.fcitx5.android.ui.main.MainViewModel
+import org.fcitx.fcitx5.android.utils.addPreference
 
 abstract class FcitxPreferenceFragment : PaddingPreferenceFragment() {
     abstract fun getPageTitle(): String
@@ -41,7 +41,7 @@ abstract class FcitxPreferenceFragment : PaddingPreferenceFragment() {
 
     private fun save() {
         if (!configLoaded) return
-        scope.launchOnFcitxReady(fcitx) {
+        fcitx.launchOnReady {
             saveConfig(it, raw["cfg"])
         }
     }
@@ -73,26 +73,20 @@ abstract class FcitxPreferenceFragment : PaddingPreferenceFragment() {
                     preferenceManager, parentFragmentManager, raw, ::save
                 ).apply {
                     if (isEmpty()) {
-                        addPreference(Preference(context).apply {
-                            setTitle(R.string.no_config_options)
-                            isIconSpaceReserved = false
-                        })
+                        addPreference(R.string.no_config_options)
                     }
                 }
             } else {
                 preferenceManager.createPreferenceScreen(context).apply {
-                    addPreference(Preference(context).apply {
-                        setTitle(R.string.config_addon_not_loaded)
-                        isIconSpaceReserved = false
-                    })
+                    addPreference(R.string.config_addon_not_loaded)
                 }
             }
             viewModel.disableAboutButton()
         }
     }
 
-    override fun onResume() {
-        super.onResume()
+    override fun onStart() {
+        super.onStart()
         viewModel.setToolbarTitle(getPageTitle())
     }
 

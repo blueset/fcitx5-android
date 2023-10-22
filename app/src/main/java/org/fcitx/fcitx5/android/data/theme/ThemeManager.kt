@@ -2,15 +2,26 @@ package org.fcitx.fcitx5.android.data.theme
 
 import android.content.SharedPreferences
 import android.content.res.Configuration
+import android.os.Build
 import androidx.annotation.Keep
+import androidx.annotation.RequiresApi
 import androidx.annotation.StringRes
+import androidx.core.content.edit
+import androidx.preference.PreferenceManager
 import kotlinx.serialization.json.Json
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceCategory
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceInternal
-import org.fcitx.fcitx5.android.utils.*
+import org.fcitx.fcitx5.android.utils.WeakHashSet
+import org.fcitx.fcitx5.android.utils.appContext
+import org.fcitx.fcitx5.android.utils.errorArg
+import org.fcitx.fcitx5.android.utils.errorRuntime
+import org.fcitx.fcitx5.android.utils.errorState
+import org.fcitx.fcitx5.android.utils.extract
+import org.fcitx.fcitx5.android.utils.isDarkMode
+import org.fcitx.fcitx5.android.utils.withTempDir
 import timber.log.Timber
 import java.io.File
 import java.io.FileFilter
@@ -114,39 +125,38 @@ object ThemeManager {
      */
     fun exportTheme(theme: Theme.Custom, dest: OutputStream) =
         runCatching {
-            ZipOutputStream(dest.buffered())
-                .use { zipStream ->
-                    // we don't export the internal path of images
-                    val tweakedTheme = theme.backgroundImage?.let {
-                        theme.copy(
-                            backgroundImage = theme.backgroundImage.copy(
-                                croppedFilePath = theme.backgroundImage.croppedFilePath
-                                    .substringAfterLast('/'),
-                                srcFilePath = theme.backgroundImage.srcFilePath
-                                    .substringAfterLast('/'),
-                            )
+            ZipOutputStream(dest.buffered()).use { zipStream ->
+                // we don't export the internal path of images
+                val tweakedTheme = theme.backgroundImage?.let {
+                    theme.copy(
+                        backgroundImage = theme.backgroundImage.copy(
+                            croppedFilePath = theme.backgroundImage.croppedFilePath
+                                .substringAfterLast('/'),
+                            srcFilePath = theme.backgroundImage.srcFilePath
+                                .substringAfterLast('/'),
                         )
-                    } ?: theme
-                    if (tweakedTheme.backgroundImage != null) {
-                        requireNotNull(theme.backgroundImage)
-                        // write cropped image
-                        zipStream.putNextEntry(ZipEntry(tweakedTheme.backgroundImage.croppedFilePath))
-                        File(theme.backgroundImage.croppedFilePath).inputStream()
-                            .use { it.copyTo(zipStream) }
-                        // write src image
-                        zipStream.putNextEntry(ZipEntry(tweakedTheme.backgroundImage.srcFilePath))
-                        File(theme.backgroundImage.srcFilePath).inputStream()
-                            .use { it.copyTo(zipStream) }
-                    }
-                    // write json
-                    zipStream.putNextEntry(ZipEntry("${tweakedTheme.name}.json"))
-                    zipStream.write(
-                        Json.encodeToString(CustomThemeSerializer, tweakedTheme)
-                            .encodeToByteArray()
                     )
-                    // done
-                    zipStream.closeEntry()
+                } ?: theme
+                if (tweakedTheme.backgroundImage != null) {
+                    requireNotNull(theme.backgroundImage)
+                    // write cropped image
+                    zipStream.putNextEntry(ZipEntry(tweakedTheme.backgroundImage.croppedFilePath))
+                    File(theme.backgroundImage.croppedFilePath).inputStream()
+                        .use { it.copyTo(zipStream) }
+                    // write src image
+                    zipStream.putNextEntry(ZipEntry(tweakedTheme.backgroundImage.srcFilePath))
+                    File(theme.backgroundImage.srcFilePath).inputStream()
+                        .use { it.copyTo(zipStream) }
                 }
+                // write json
+                zipStream.putNextEntry(ZipEntry("${tweakedTheme.name}.json"))
+                zipStream.write(
+                    Json.encodeToString(CustomThemeSerializer, tweakedTheme)
+                        .encodeToByteArray()
+                )
+                // done
+                zipStream.closeEntry()
+            }
         }
 
     /**
@@ -179,8 +189,9 @@ object ThemeManager {
                                 srcFilePath = srcFile.path
                             )
                         )
-                    } else
+                    } else {
                         decoded
+                    }
                     saveTheme(newTheme)
                     Triple(!exists, newTheme, migrated)
                 }
@@ -210,11 +221,45 @@ object ThemeManager {
 
         val keyRippleEffect = switch(R.string.key_ripple_effect, "key_ripple_effect", false)
 
-        val keyHorizontalMargin =
-            int(R.string.key_horizontal_margin, "key_horizontal_margin", 3, 0, 8, "dp")
+        val keyHorizontalMargin: ManagedPreference.PInt
+        val keyHorizontalMarginLandscape: ManagedPreference.PInt
 
-        val keyVerticalMargin =
-            int(R.string.key_vertical_margin, "key_vertical_margin", 7, 0, 16, "dp")
+        init {
+            val (primary, secondary) = twinInt(
+                R.string.key_horizontal_margin,
+                R.string.portrait,
+                "key_horizontal_margin",
+                3,
+                R.string.landscape,
+                "key_horizontal_margin_landscape",
+                3,
+                0,
+                24,
+                "dp"
+            )
+            keyHorizontalMargin = primary
+            keyHorizontalMarginLandscape = secondary
+        }
+
+        val keyVerticalMargin: ManagedPreference.PInt
+        val keyVerticalMarginLandscape: ManagedPreference.PInt
+
+        init {
+            val (primary, secondary) = twinInt(
+                R.string.key_vertical_margin,
+                R.string.portrait,
+                "key_vertical_margin",
+                7,
+                R.string.landscape,
+                "key_vertical_margin_landscape",
+                4,
+                0,
+                24,
+                "dp"
+            )
+            keyVerticalMargin = primary
+            keyVerticalMarginLandscape = secondary
+        }
 
         val keyRadius = int(R.string.key_radius, "key_radius", 4, 0, 48, "dp")
 
@@ -375,6 +420,20 @@ object ThemeManager {
         isCurrentDark = isDark
         if (prefs.followSystemDayNightTheme.getValue()) {
             switchTheme((if (isDark) prefs.darkModeTheme else prefs.lightModeTheme).getValue())
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.N)
+    fun syncToDeviceEncryptedStorage() {
+        val ctx = appContext.createDeviceProtectedStorageContext()
+        val sp = PreferenceManager.getDefaultSharedPreferences(ctx)
+        sp.edit {
+            internalPrefs.managedPreferences.forEach {
+                it.value.putValueTo(this@edit)
+            }
+            prefs.managedPreferences.forEach {
+                it.value.putValueTo(this@edit)
+            }
         }
     }
 

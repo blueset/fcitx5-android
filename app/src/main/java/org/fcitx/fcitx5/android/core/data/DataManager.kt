@@ -5,11 +5,12 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.AssetManager
 import android.os.Build
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.fcitx.fcitx5.android.BuildConfig
 import org.fcitx.fcitx5.android.core.data.DataManager.dataDir
 import org.fcitx.fcitx5.android.utils.Const
+import org.fcitx.fcitx5.android.utils.FileUtil
 import org.fcitx.fcitx5.android.utils.appContext
 import org.fcitx.fcitx5.android.utils.javaIdRegex
 import org.xmlpull.v1.XmlPullParser
@@ -25,7 +26,7 @@ import kotlin.concurrent.withLock
  */
 object DataManager {
 
-    const val PLUGIN_INTENT = "org.fcitx.fcitx5.android.plugin.MANIFEST"
+    const val PLUGIN_INTENT = "${BuildConfig.APPLICATION_ID}.plugin.MANIFEST"
 
     private val lock = ReentrantLock()
 
@@ -43,7 +44,15 @@ object DataManager {
         json.encodeToString(descriptor)
     }
 
-    val dataDir = File(appContext.applicationInfo.dataDir)
+    // If Android version supports direct boot, we put the hierarchy in device encrypted storage
+    // instead of credential encrypted storage so that data can be accessed before user unlock
+    val dataDir: File = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        Timber.d("Using device protected storage")
+        appContext.createDeviceProtectedStorageContext().dataDir
+    } else {
+        File(appContext.applicationInfo.dataDir)
+    }
+
     private val destDescriptorFile = File(dataDir, Const.dataDescriptorName)
 
     private fun AssetManager.getDataDescriptor() =
@@ -68,33 +77,12 @@ object DataManager {
         callbacks.add(block)
 
     @SuppressLint("DiscouragedApi")
-    fun sync() = lock.withLock {
-        synced = false
-        loadedPlugins.clear()
-        failedPlugins.clear()
-
-        // load last run's data descriptor
-        val oldDescriptor =
-            destDescriptorFile
-                .takeIf { it.exists() && it.isFile }
-                ?.runCatching { readText() }
-                ?.getOrNull()
-                ?.let { deserializeDataDescriptor(it) }
-                ?.getOrNull()
-                ?: DataDescriptor("", mapOf())
-
-        // load app's data descriptor
-        val mainDescriptor =
-            appContext.assets
-                .open(Const.dataDescriptorName)
-                .bufferedReader()
-                .use { it.readText() }
-                .let { deserializeDataDescriptor(it) }
-                .getOrThrow()
+    fun detectPlugins(): Pair<Set<PluginDescriptor>, Map<String, PluginLoadFailed>> {
+        val toLoad = mutableSetOf<PluginDescriptor>()
+        val preloadFailed = mutableMapOf<String, PluginLoadFailed>()
 
         val pm = appContext.packageManager
 
-        val isDebugBuild = Const.buildType == "debug"
         val pluginPackages = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             pm.queryIntentActivities(
                 Intent(PLUGIN_INTENT),
@@ -103,15 +91,11 @@ object DataManager {
         } else {
             @Suppress("DEPRECATION")
             pm.queryIntentActivities(Intent(PLUGIN_INTENT), PackageManager.MATCH_ALL)
-        }.mapNotNull {
-            // Only consider plugin with the same build variant as app's
-            val packageName = it.activityInfo.packageName
-            if (isDebugBuild == packageName.endsWith(".debug")) packageName else null
+        }.map {
+            it.activityInfo.packageName
         }
 
         Timber.d("Detected plugin packages: ${pluginPackages.joinToString()}")
-
-        val parsedDescriptors = mutableListOf<PluginDescriptor>()
 
         // Parse plugin.xml
         for (packageName in pluginPackages) {
@@ -127,6 +111,7 @@ object DataManager {
             var domain: String? = null
             var apiVersion: String? = null
             var description: String? = null
+            var hasService = false
             var text: String? = null
             while ((eventType != XmlPullParser.END_DOCUMENT)) {
                 when (eventType) {
@@ -135,6 +120,7 @@ object DataManager {
                         "apiVersion" -> apiVersion = text
                         "domain" -> domain = text
                         "description" -> description = text
+                        "hasService" -> hasService = text?.lowercase() == "true"
                     }
                 }
                 eventType = parser.next()
@@ -162,25 +148,55 @@ object DataManager {
                         @Suppress("DEPRECATION")
                         pm.getPackageInfo(packageName, PackageManager.GET_META_DATA)
                     }
-                    parsedDescriptors.add(
+                    toLoad.add(
                         PluginDescriptor(
                             packageName,
                             apiVersion,
                             domain,
                             description,
+                            hasService,
                             info.versionName,
                             info.applicationInfo.nativeLibraryDir
                         )
                     )
                 } else {
                     Timber.w("$packageName's api version [$apiVersion] doesn't match with the current [${PluginDescriptor.pluginAPI}]")
-                    failedPlugins[packageName] = PluginLoadFailed.PluginAPIIncompatible(apiVersion)
+                    preloadFailed[packageName] = PluginLoadFailed.PluginAPIIncompatible(apiVersion)
                 }
             } else {
                 Timber.w("Failed to parse plugin descriptor of $packageName")
-                failedPlugins[packageName] = PluginLoadFailed.PluginDescriptorParseError
+                preloadFailed[packageName] = PluginLoadFailed.PluginDescriptorParseError
             }
         }
+        return toLoad to preloadFailed
+    }
+
+    fun sync() = lock.withLock {
+        synced = false
+        loadedPlugins.clear()
+        failedPlugins.clear()
+
+        // load last run's data descriptor
+        val oldDescriptor =
+            destDescriptorFile
+                .takeIf { it.exists() && it.isFile }
+                ?.runCatching { readText() }
+                ?.getOrNull()
+                ?.let { deserializeDataDescriptor(it) }
+                ?.getOrNull()
+                ?: DataDescriptor("", mapOf(), mapOf())
+
+        // load app's data descriptor
+        val mainDescriptor =
+            appContext.assets
+                .open(Const.dataDescriptorName)
+                .bufferedReader()
+                .use { it.readText() }
+                .let { deserializeDataDescriptor(it) }
+                .getOrThrow()
+
+        val (parsedDescriptors, failed) = detectPlugins()
+        failedPlugins.putAll(failed)
 
         Timber.d("Plugins to load: $parsedDescriptors")
 
@@ -196,13 +212,18 @@ object DataManager {
             val pluginContext = appContext.createPackageContext(plugin.packageName, 0)
             val assets = pluginContext.assets
             val descriptor = runCatching { assets.getDataDescriptor() }.onFailure {
-                it.printStackTrace()
-                Timber.w("Failed to get and decode the data descriptor of ${plugin.name}")
+                Timber.w("Failed to get or decode data descriptor of '${plugin.name}'")
+                Timber.w(it)
             }.getOrNull() ?: continue
             try {
                 newHierarchy.install(descriptor, FileSource.Plugin(plugin))
-            } catch (e: DataHierarchy.Conflict) {
-                Timber.w("Path ${e.path} is already created by ${e.src}")
+            } catch (e: DataHierarchy.PathConflict) {
+                Timber.w("Path '${e.path}' has already been created by '${e.src}', cannot create file")
+                failedPlugins[plugin.packageName] =
+                    PluginLoadFailed.PathConflict(plugin, e.path, e.src)
+                continue
+            } catch (e: DataHierarchy.SymlinkConflict) {
+                Timber.w("Path '${e.path}' has already been created by '${e.src}', cannot create symlink")
                 failedPlugins[plugin.packageName] =
                     PluginLoadFailed.PathConflict(plugin, e.path, e.src)
                 continue
@@ -226,10 +247,10 @@ object DataManager {
                     assets.copyFile(it.path)
                 }
                 is FileAction.DeleteDir -> {
-                    deleteDir(it.path)
+                    removePath(it.path).getOrThrow()
                 }
                 is FileAction.DeleteFile -> {
-                    deleteFile(it.path)
+                    removePath(it.path).getOrThrow()
                 }
                 is FileAction.UpdateFile -> {
                     val assets = if (it.src is FileSource.Plugin)
@@ -237,27 +258,35 @@ object DataManager {
                     else appContext.assets
                     assets.copyFile(it.path)
                 }
+                is FileAction.CreateSymlink -> {
+                    removePath(it.path).getOrThrow()
+                    symlink(it.src, it.path).getOrThrow()
+                }
             }
         }
         // save the new hierarchy as the data descriptor to be used in the next run
         destDescriptorFile.writeText(serializeDataDescriptor(newHierarchy.downToDataDescriptor()).getOrThrow())
         callbacks.forEach { it() }
         callbacks.clear()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            // remove old assets from credential encrypted storage
+            val oldDataDir = appContext.dataDir
+            val oldDataDescriptor = oldDataDir.resolve(Const.dataDescriptorName)
+            if (oldDataDescriptor.exists()) {
+                oldDataDescriptor.delete()
+                oldDataDir.resolve("README.md").delete()
+                oldDataDir.resolve("usr").deleteRecursively()
+            }
+        }
         synced = true
         Timber.d("Synced")
     }
 
-    private fun deleteFile(path: String) {
-        val file = File(dataDir, path)
-        if (file.exists() && file.isFile)
-            file.delete()
-    }
+    private fun removePath(path: String) =
+        FileUtil.removeFile(dataDir.resolve(path))
 
-    private fun deleteDir(path: String) {
-        val dir = File(dataDir, path)
-        if (dir.exists() && dir.isDirectory)
-            dir.deleteRecursively()
-    }
+    private fun symlink(source: String, target: String) =
+        FileUtil.symlink(dataDir.resolve(source), dataDir.resolve(target))
 
     private fun AssetManager.copyFile(filename: String) {
         open(filename).use { i ->
@@ -270,7 +299,9 @@ object DataManager {
 
     fun deleteAndSync() {
         lock.withLock {
-            dataDir.deleteRecursively()
+            dataDir.resolve(Const.dataDescriptorName).delete()
+            dataDir.resolve("README.md").delete()
+            dataDir.resolve("usr").deleteRecursively()
         }
         sync()
     }

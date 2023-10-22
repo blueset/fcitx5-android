@@ -13,7 +13,7 @@ import kotlin.io.path.isSymbolicLink
 class FcitxComponentPlugin : Plugin<Project> {
 
     abstract class FcitxComponentExtension {
-        var installFcitx5Data: Boolean = false
+        var installLibraries: List<String> = emptyList()
     }
 
     companion object {
@@ -22,17 +22,18 @@ class FcitxComponentPlugin : Plugin<Project> {
     }
 
     override fun apply(target: Project) {
-        target.pluginManager.apply("cmake-dir")
+        target.pluginManager.apply("org.fcitx.fcitx5.android.android-sdk-path")
+        target.pluginManager.apply("org.fcitx.fcitx5.android.cmake-dir")
         registerCMakeTask(target, "generate-desktop-file", "config")
         registerCMakeTask(target, "translation-file", "translation")
         registerCleanTask(target)
         target.extensions.create<FcitxComponentExtension>("fcitxComponent")
         target.afterEvaluate {
             val ext = extensions.getByName<FcitxComponentExtension>("fcitxComponent")
-            if (ext.installFcitx5Data) {
-                val libFcitx5 = rootProject.project(":lib:fcitx5")
-                registerCMakeTask(target, "generate-desktop-file", "config", libFcitx5)
-                registerCMakeTask(target, "translation-file", "translation", libFcitx5)
+            ext.installLibraries.forEach {
+                val project = rootProject.project(":lib:$it")
+                registerCMakeTask(target, "generate-desktop-file", "config", project)
+                registerCMakeTask(target, "translation-file", "translation", project)
             }
         }
     }
@@ -47,19 +48,23 @@ class FcitxComponentPlugin : Plugin<Project> {
         sourceProject: Project = project
     ) {
         val dependencyTask = project.tasks.findByName(INSTALL_TASK) ?: project.task(INSTALL_TASK)
-        val taskName = if (project === sourceProject) "installProject" else "installFcitx5"
-        project.task("${taskName}${component.capitalized()}") {
+        val taskName = if (project === sourceProject) {
+            "installProject${component.capitalized()}"
+        } else {
+            "installLibrary${component.capitalized()}[${sourceProject.name}]"
+        }
+        project.task(taskName) {
             runAfterNativeConfigure(sourceProject)
 
             doLast {
                 project.exec {
                     workingDir = sourceProject.cmakeDir
-                    commandLine("cmake", "--build", ".", "--target", target)
+                    commandLine(project.cmakeBinary, "--build", ".", "--target", target)
                 }
                 project.exec {
                     workingDir = sourceProject.cmakeDir
                     environment("DESTDIR", project.assetsDir.absolutePath)
-                    commandLine("cmake", "--install", ".", "--component", component)
+                    commandLine(project.cmakeBinary, "--install", ".", "--component", component)
                 }
             }
         }.also {

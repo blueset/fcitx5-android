@@ -59,7 +59,6 @@ import splitties.views.backgroundColor
 import splitties.views.dsl.core.add
 import splitties.views.dsl.core.lParams
 import splitties.views.dsl.core.matchParent
-import splitties.views.imageResource
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
@@ -84,11 +83,11 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
 
     private var clipboardTimeoutJob: Job? = null
 
-    private var isClipboardFresh: Boolean = true
-    private var isInlineSuggestionEmpty: Boolean = true
+    private var isClipboardFresh: Boolean = false
+    private var isInlineSuggestionPresent: Boolean = false
     private var isCapabilityFlagsPassword: Boolean = false
     private var isKeyboardLayoutNumber: Boolean = false
-    private var isToolbarManuallyExpanded: Boolean = false
+    private var isToolbarManuallyToggled: Boolean = false
 
     @Keep
     private val onClipboardUpdateListener =
@@ -96,10 +95,10 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
             if (!clipboardSuggestion.getValue()) return@OnClipboardUpdateListener
             service.lifecycleScope.launch {
                 if (it.text.isEmpty()) {
-                    isClipboardFresh = true
+                    isClipboardFresh = false
                 } else {
                     idleUi.clipboardUi.text.text = it.text.take(42)
-                    isClipboardFresh = false
+                    isClipboardFresh = true
                     launchClipboardTimeoutJob()
                 }
                 evalIdleUiState()
@@ -110,7 +109,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private val onClipboardSuggestionUpdateListener =
         ManagedPreference.OnChangeListener<Boolean> { _, it ->
             if (!it) {
-                isClipboardFresh = true
+                isClipboardFresh = false
                 evalIdleUiState()
                 clipboardTimeoutJob?.cancel()
                 clipboardTimeoutJob = null
@@ -136,18 +135,25 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         if (timeout < 0L) return
         clipboardTimeoutJob = service.lifecycleScope.launch {
             delay(timeout)
-            isClipboardFresh = true
+            isClipboardFresh = false
             clipboardTimeoutJob = null
         }
     }
 
     private fun evalIdleUiState(fromUser: Boolean = false) {
         val newState = when {
-            !isClipboardFresh -> IdleUi.State.Clipboard
-            !isInlineSuggestionEmpty -> IdleUi.State.InlineSuggestion
+            isClipboardFresh -> IdleUi.State.Clipboard
+            isInlineSuggestionPresent -> IdleUi.State.InlineSuggestion
             isCapabilityFlagsPassword && !isKeyboardLayoutNumber -> IdleUi.State.NumberRow
-            expandToolbarByDefault || isToolbarManuallyExpanded -> IdleUi.State.Toolbar
-            else -> IdleUi.State.Empty
+            /**
+             * state matrix:
+             *                               expandToolbarByDefault
+             *                          |   \   |    true |   false
+             * isToolbarManuallyToggled |  true |   Empty | Toolbar
+             *                          | false | Toolbar |   Empty
+             */
+            expandToolbarByDefault == isToolbarManuallyToggled -> IdleUi.State.Empty
+            else -> IdleUi.State.Toolbar
         }
         if (newState == idleUi.currentState) return
         idleUi.updateState(newState, fromUser)
@@ -167,12 +173,19 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private val idleUi: IdleUi by lazy {
         IdleUi(context, theme, popup, commonKeyActionListener).apply {
             menuButton.setOnClickListener {
-                if (idleUi.currentState == IdleUi.State.Toolbar) {
-                    isToolbarManuallyExpanded = false
-                    evalIdleUiState(fromUser = true)
-                } else {
-                    isToolbarManuallyExpanded = true
-                    idleUi.updateState(IdleUi.State.Toolbar, fromUser = true)
+                when (idleUi.currentState) {
+                    IdleUi.State.Empty -> {
+                        isToolbarManuallyToggled = !expandToolbarByDefault
+                        evalIdleUiState(fromUser = true)
+                    }
+                    IdleUi.State.Toolbar -> {
+                        isToolbarManuallyToggled = expandToolbarByDefault
+                        evalIdleUiState(fromUser = true)
+                    }
+                    else -> {
+                        isToolbarManuallyToggled = !expandToolbarByDefault
+                        idleUi.updateState(IdleUi.State.Toolbar, fromUser = true)
+                    }
                 }
                 // reset timeout timer (if present) when user switch layout
                 if (clipboardTimeoutJob != null) {
@@ -204,8 +217,8 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                     }
                     clipboardTimeoutJob?.cancel()
                     clipboardTimeoutJob = null
-                    isClipboardFresh = true
-                    evalIdleUiState(fromUser = true)
+                    isClipboardFresh = false
+                    evalIdleUiState()
                 }
                 setOnLongClickListener {
                     ClipboardManager.lastEntry?.let {
@@ -255,7 +268,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                 }
             )
         }
-        candidateUi.expandButton.image.imageResource = R.drawable.ic_baseline_expand_more_24
+        candidateUi.expandButton.setIcon(R.drawable.ic_baseline_expand_more_24)
     }
 
     // set expand candidate button to close expand candidate
@@ -263,7 +276,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         candidateUi.expandButton.setOnClickListener {
             windowManager.attachWindow(KeyboardWindow)
         }
-        candidateUi.expandButton.image.imageResource = R.drawable.ic_baseline_expand_less_24
+        candidateUi.expandButton.setIcon(R.drawable.ic_baseline_expand_less_24)
     }
 
     // should be used with setExpandButtonToAttach or setExpandButtonToDetach
@@ -312,7 +325,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
             idleUi.privateMode(info.imeOptions.hasFlag(EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING))
         }
         isCapabilityFlagsPassword = toolbarNumRowOnPassword && capFlags.has(CapabilityFlag.Password)
-        isInlineSuggestionEmpty = true
+        isInlineSuggestionPresent = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             idleUi.inlineSuggestionsBar.clear()
         }
@@ -362,14 +375,15 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
 
     @RequiresApi(Build.VERSION_CODES.R)
     fun handleInlineSuggestions(response: InlineSuggestionsResponse): Boolean {
-        if (response.inlineSuggestions.isEmpty()) {
-            isInlineSuggestionEmpty = true
+        val suggestions = response.inlineSuggestions
+        if (suggestions.isEmpty()) {
+            isInlineSuggestionPresent = false
             return true
         }
         var pinned: InlineSuggestion? = null
         val scrollable = mutableListOf<InlineSuggestion>()
         var extraPinnedCount = 0
-        response.inlineSuggestions.forEach {
+        suggestions.forEach {
             if (it.info.isPinned) {
                 if (pinned == null) {
                     pinned = it
@@ -393,14 +407,15 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
             }.awaitAll()
             idleUi.inlineSuggestionsBar.setScrollableViews(views)
         }
-        isInlineSuggestionEmpty = false
+        isInlineSuggestionPresent = true
         evalIdleUiState()
         return true
     }
 
     @RequiresApi(Build.VERSION_CODES.R)
-    private suspend fun inflateInlineContentView(suggestion: InlineSuggestion): InlineContentView {
+    private suspend fun inflateInlineContentView(suggestion: InlineSuggestion): InlineContentView? {
         return suspendCoroutine { c ->
+            // callback view might be null
             suggestion.inflate(context, suggestionSize, directExecutor) { v ->
                 c.resume(v)
             }

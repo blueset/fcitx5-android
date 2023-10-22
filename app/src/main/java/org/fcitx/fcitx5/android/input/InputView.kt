@@ -14,14 +14,18 @@ import android.widget.ImageView
 import androidx.annotation.Keep
 import androidx.annotation.RequiresApi
 import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.core.view.*
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.CapabilityFlags
 import org.fcitx.fcitx5.android.core.FcitxEvent
 import org.fcitx.fcitx5.android.daemon.FcitxConnection
-import org.fcitx.fcitx5.android.daemon.launchOnFcitxReady
+import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.data.theme.Theme
@@ -47,8 +51,24 @@ import org.mechdancer.dependency.DynamicScope
 import org.mechdancer.dependency.manager.wrapToUniqueComponent
 import org.mechdancer.dependency.plusAssign
 import splitties.dimensions.dp
-import splitties.views.dsl.constraintlayout.*
-import splitties.views.dsl.core.*
+import splitties.views.dsl.constraintlayout.above
+import splitties.views.dsl.constraintlayout.below
+import splitties.views.dsl.constraintlayout.bottomOfParent
+import splitties.views.dsl.constraintlayout.centerHorizontally
+import splitties.views.dsl.constraintlayout.centerVertically
+import splitties.views.dsl.constraintlayout.constraintLayout
+import splitties.views.dsl.constraintlayout.endOfParent
+import splitties.views.dsl.constraintlayout.endToStartOf
+import splitties.views.dsl.constraintlayout.lParams
+import splitties.views.dsl.constraintlayout.startOfParent
+import splitties.views.dsl.constraintlayout.startToEndOf
+import splitties.views.dsl.constraintlayout.topOfParent
+import splitties.views.dsl.core.add
+import splitties.views.dsl.core.imageView
+import splitties.views.dsl.core.matchParent
+import splitties.views.dsl.core.view
+import splitties.views.dsl.core.withTheme
+import splitties.views.dsl.core.wrapContent
 import splitties.views.imageDrawable
 
 @SuppressLint("ViewConstructor")
@@ -83,11 +103,7 @@ class InputView(
         setOnClickListener(placeholderOnClickListener)
     }
 
-    private val eventHandlerJob = service.lifecycleScope.launch {
-        fcitx.runImmediately { eventFlow }.collect {
-            handleFcitxEvent(it)
-        }
-    }
+    private val eventHandlerJob: Job
 
     private val scope = DynamicScope()
     private val themedContext = context.withTheme(R.style.Theme_InputViewTheme)
@@ -126,6 +142,9 @@ class InputView(
     }
 
     private val keyboardPrefs = AppPrefs.getInstance().keyboard
+
+    private val focusChangeResetKeyboard by keyboardPrefs.focusChangeResetKeyboard
+
     private val keyboardHeightPercent = keyboardPrefs.keyboardHeightPercent
     private val keyboardHeightPercentLandscape = keyboardPrefs.keyboardHeightPercentLandscape
     private val keyboardSidePadding = keyboardPrefs.keyboardSidePadding
@@ -180,8 +199,14 @@ class InputView(
         // MUST call before any operation
         setupScope()
 
+        eventHandlerJob = service.lifecycleScope.launch {
+            fcitx.runImmediately { eventFlow }.collect {
+                handleFcitxEvent(it)
+            }
+        }
+
         // restore punctuation mapping in case of InputView recreation
-        service.lifecycleScope.launchOnFcitxReady(fcitx) {
+        fcitx.launchOnReady {
             punctuation.updatePunctuationMapping(it.statusAreaActionsCached)
         }
 
@@ -349,7 +374,9 @@ class InputView(
         }
         broadcaster.onStartInput(info, capFlags)
         returnKeyDrawable.updateDrawableOnEditorInfo(info)
-        windowManager.attachWindow(KeyboardWindow)
+        if (focusChangeResetKeyboard || !restarting) {
+            windowManager.attachWindow(KeyboardWindow)
+        }
     }
 
     private fun handleFcitxEvent(it: FcitxEvent<*>) {
@@ -369,8 +396,8 @@ class InputView(
                 broadcaster.onImeUpdate(it.data)
             }
             is FcitxEvent.StatusAreaEvent -> {
-                punctuation.updatePunctuationMapping(it.data)
-                broadcaster.onStatusAreaUpdate(it.data)
+                punctuation.updatePunctuationMapping(it.data.actions)
+                broadcaster.onStatusAreaUpdate(it.data.actions)
             }
             else -> {}
         }

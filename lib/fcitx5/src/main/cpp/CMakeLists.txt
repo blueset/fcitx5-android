@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(fcitx5-android-lib-fcitx5 VERSION 0.0.5)
-
-set(CMAKE_CXX_STANDARD 17)
+project(fcitx5-android-lib-fcitx5 VERSION 0.0.7)
 
 # For reproducible build
 add_link_options("LINKER:--hash-style=gnu,--build-id=none")
@@ -11,14 +9,6 @@ add_link_options("LINKER:--hash-style=gnu,--build-id=none")
 add_custom_target(cmake)
 # dummy target to export "notifications_public.h"
 add_custom_target(notifications)
-
-set(CMAKE_INSTALL_PREFIX /usr)
-# fcitx-utils/standardpath.cpp uses FCITX_INSTALL_LIBDATADIR,
-# which is CMAKE_INSTALL_LIBDATADIR's absolute path
-set(CMAKE_INSTALL_LIBDATADIR /usr/lib)
-set(FCITX_INSTALL_PKGDATADIR /usr/share/fcitx5)
-set(FCITX_INSTALL_LOCALEDIR /usr/share/locale)
-set(LIBIME_INSTALL_PKGDATADIR table)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
@@ -39,6 +29,10 @@ find_package(LibIntl)
 # prebuilt libevent
 set(Libevent_DIR "${PREBUILT_DIR}/libevent/${ANDROID_ABI}/lib/cmake/libevent")
 find_package(Libevent)
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Fcitx5AndroidInstallDirs.cmake")
+# LIBDATADIR is not a standard CMake install dir, defined in fcitx5/CMakeLists.txt#L169
+set(CMAKE_INSTALL_LIBDATADIR "/usr/lib")
 
 option(ENABLE_TEST "" OFF)
 option(ENABLE_COVERAGE "" OFF)

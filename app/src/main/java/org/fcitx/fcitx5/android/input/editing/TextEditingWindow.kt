@@ -2,11 +2,10 @@ package org.fcitx.fcitx5.android.input.editing
 
 import android.view.KeyEvent
 import android.view.View
-import androidx.lifecycle.lifecycleScope
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.FcitxKeyMapping
 import org.fcitx.fcitx5.android.daemon.FcitxConnection
-import org.fcitx.fcitx5.android.daemon.launchOnFcitxReady
+import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.input.FcitxInputMethodService
 import org.fcitx.fcitx5.android.input.broadcast.InputBroadcastReceiver
 import org.fcitx.fcitx5.android.input.clipboard.ClipboardWindow
@@ -16,7 +15,6 @@ import org.fcitx.fcitx5.android.input.dependency.theme
 import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView
 import org.fcitx.fcitx5.android.input.wm.InputWindow
 import org.fcitx.fcitx5.android.input.wm.InputWindowManager
-import org.fcitx.fcitx5.android.utils.inputConnection
 import org.mechdancer.dependency.manager.must
 
 class TextEditingWindow : InputWindow.ExtendedInputWindow<TextEditingWindow>(),
@@ -58,30 +56,30 @@ class TextEditingWindow : InputWindow.ExtendedInputWindow<TextEditingWindow>(),
                     service.cancelSelection()
                 } else {
                     userSelection = !userSelection
-                    updateSelection(hasSelection, userSelection)
+                    updateSelection(false, userSelection)
                 }
             }
             selectAllButton.setOnClickListener {
                 // activate select button after operation
                 userSelection = true
-                service.inputConnection?.performContextMenuAction(android.R.id.selectAll)
+                service.currentInputConnection?.performContextMenuAction(android.R.id.selectAll)
             }
             cutButton.setOnClickListener {
                 // deactivate select button after operation
                 userSelection = false
-                service.inputConnection?.performContextMenuAction(android.R.id.cut)
+                service.currentInputConnection?.performContextMenuAction(android.R.id.cut)
             }
             copyButton.setOnClickListener {
                 userSelection = false
-                service.inputConnection?.performContextMenuAction(android.R.id.copy)
+                service.currentInputConnection?.performContextMenuAction(android.R.id.copy)
             }
             pasteButton.setOnClickListener {
                 userSelection = false
-                service.inputConnection?.performContextMenuAction(android.R.id.paste)
+                service.currentInputConnection?.performContextMenuAction(android.R.id.paste)
             }
             backspaceButton.onClickWithRepeating {
                 userSelection = false
-                service.lifecycleScope.launchOnFcitxReady(fcitx) {
+                fcitx.launchOnReady {
                     it.sendKey(FcitxKeyMapping.FcitxKey_BackSpace)
                 }
             }
@@ -94,8 +92,8 @@ class TextEditingWindow : InputWindow.ExtendedInputWindow<TextEditingWindow>(),
     override fun onCreateView(): View = ui.root
 
     override fun onAttached() {
-        val info = service.selection.latest
-        onSelectionUpdate(info.start, info.end)
+        val range = service.currentInputSelection
+        onSelectionUpdate(range.start, range.end)
     }
 
     override fun onDetached() {}

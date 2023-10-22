@@ -2,10 +2,9 @@ package org.fcitx.fcitx5.android.ui.main.settings
 
 import android.app.AlertDialog
 import android.view.View
-import androidx.lifecycle.lifecycleScope
 import org.fcitx.fcitx5.android.core.RawConfig
 import org.fcitx.fcitx5.android.core.getPunctuationConfig
-import org.fcitx.fcitx5.android.daemon.launchOnFcitxReady
+import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.data.punctuation.PunctuationManager
 import org.fcitx.fcitx5.android.data.punctuation.PunctuationMapEntry
 import org.fcitx.fcitx5.android.ui.common.BaseDynamicListUi
@@ -26,14 +25,7 @@ class PunctuationEditorFragment : ProgressFragment(), OnItemChangedListener<Punc
     private lateinit var mappingDesc: String
     private lateinit var altMappingDesc: String
 
-    private val dustman = NaiveDustman<PunctuationMapEntry>().apply {
-        onDirty = {
-            viewModel.enableToolbarSaveButton { saveConfig() }
-        }
-        onClean = {
-            viewModel.disableToolbarSaveButton()
-        }
-    }
+    private val dustman = NaiveDustman<PunctuationMapEntry>()
 
     private fun findDesc(raw: RawConfig) {
         // parse config desc to get description text of the options
@@ -50,7 +42,7 @@ class PunctuationEditorFragment : ProgressFragment(), OnItemChangedListener<Punc
     private fun saveConfig() {
         if (!dustman.dirty) return
         resetDustman()
-        lifecycleScope.launchOnFcitxReady(fcitx) {
+        fcitx.launchOnReady {
             PunctuationManager.save(it, lang, ui.entries)
         }
     }
@@ -58,7 +50,7 @@ class PunctuationEditorFragment : ProgressFragment(), OnItemChangedListener<Punc
     private lateinit var ui: BaseDynamicListUi<PunctuationMapEntry>
 
     private fun resetDustman() {
-        dustman.reset((ui.entries.associateBy { it.key }))
+        dustman.reset(ui.entries.associateBy { it.key })
     }
 
     override suspend fun initialize(): View {
@@ -69,11 +61,13 @@ class PunctuationEditorFragment : ProgressFragment(), OnItemChangedListener<Punc
         ui = object : BaseDynamicListUi<PunctuationMapEntry>(
             requireContext(),
             Mode.FreeAdd(hint = "", converter = { PunctuationMapEntry(it, "", "") }),
-            initialEntries
+            initialEntries,
+            enableOrder = true
         ) {
             init {
                 addTouchCallback()
                 addOnItemChangedListener(this@PunctuationEditorFragment)
+                setViewModel(viewModel)
             }
 
             override fun showEntry(x: PunctuationMapEntry) = x.run {
@@ -118,11 +112,8 @@ class PunctuationEditorFragment : ProgressFragment(), OnItemChangedListener<Punc
             }
         }
         resetDustman()
-        viewModel.enableToolbarEditButton {
-            ui.enterMultiSelect(
-                requireActivity().onBackPressedDispatcher,
-                viewModel
-            )
+        viewModel.enableToolbarEditButton(initialEntries.isNotEmpty()) {
+            ui.enterMultiSelect(requireActivity().onBackPressedDispatcher)
         }
         return ui.root
     }
@@ -143,30 +134,31 @@ class PunctuationEditorFragment : ProgressFragment(), OnItemChangedListener<Punc
         dustman.addOrUpdate(new.key, new)
     }
 
-    override fun onResume() {
-        super.onResume()
+    override fun onItemSwapped(fromIdx: Int, toIdx: Int, item: PunctuationMapEntry) {
+        dustman.forceDirty()
+    }
+
+    override fun onStart() {
+        super.onStart()
         viewModel.setToolbarTitle(requireArguments().getString(TITLE)!!)
-        if (::ui.isInitialized) {
-            viewModel.enableToolbarEditButton {
-                ui.enterMultiSelect(
-                    requireActivity().onBackPressedDispatcher,
-                    viewModel
-                )
+        if (isInitialized) {
+            viewModel.enableToolbarEditButton(ui.entries.isNotEmpty()) {
+                ui.enterMultiSelect(requireActivity().onBackPressedDispatcher)
             }
         }
     }
 
-    override fun onPause() {
+    override fun onStop() {
         saveConfig()
-        if (::ui.isInitialized) {
-            ui.exitMultiSelect(viewModel)
-        }
         viewModel.disableToolbarEditButton()
-        super.onPause()
+        if (isInitialized) {
+            ui.exitMultiSelect()
+        }
+        super.onStop()
     }
 
     override fun onDestroy() {
-        if (::ui.isInitialized) {
+        if (isInitialized) {
             ui.removeItemChangedListener()
         }
         super.onDestroy()

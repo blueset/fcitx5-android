@@ -8,9 +8,9 @@ import androidx.core.os.bundleOf
 import androidx.navigation.NavDeepLinkBuilder
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.ui.main.ClipboardEditActivity
-import org.fcitx.fcitx5.android.ui.main.LogActivity
 import org.fcitx.fcitx5.android.ui.main.MainActivity
 import org.fcitx.fcitx5.android.ui.main.settings.im.InputMethodConfigFragment
+import kotlin.system.exitProcess
 
 object AppUtil {
 
@@ -18,24 +18,21 @@ object AppUtil {
         context.startActivity(
             Intent(context, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-        )
-    }
-
-    fun launchLog(context: Context, initIntent: Intent.() -> Unit = {}) {
-        context.startActivity(
-            Intent(context, LogActivity::class.java).apply {
-                initIntent.invoke(this)
+                addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
             }
         )
     }
 
     private fun launchMainToDest(context: Context, @IdRes dest: Int, arguments: Bundle? = null) {
         NavDeepLinkBuilder(context)
+            .setComponentName(MainActivity::class.java)
             .setGraph(R.navigation.settings_nav)
             .addDestination(dest, arguments)
             .createPendingIntent()
-            .send()
+            .send(context, 0, Intent().apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
+            })
     }
 
     fun launchMainToKeyboard(context: Context) =
@@ -45,7 +42,7 @@ object AppUtil {
         launchMainToDest(context, R.id.imListFragment)
 
     fun launchMainToThemeList(context: Context) =
-        launchMainToDest(context, R.id.themeListFragment)
+        launchMainToDest(context, R.id.themeFragment)
 
     fun launchMainToInputMethodConfig(context: Context, uniqueName: String, displayName: String) =
         launchMainToDest(
@@ -65,4 +62,7 @@ object AppUtil {
         )
     }
 
+    fun exit() {
+        exitProcess(0)
+    }
 }

@@ -16,14 +16,14 @@ class MainFragment : PaddingPreferenceFragment() {
 
     private val viewModel: MainViewModel by activityViewModels()
 
-    override fun onResume() {
-        super.onResume()
+    override fun onStart() {
+        super.onStart()
         viewModel.enableAboutButton()
     }
 
-    override fun onPause() {
+    override fun onStop() {
         viewModel.disableAboutButton()
-        super.onPause()
+        super.onStop()
     }
 
     private fun PreferenceCategory.addDestinationPreference(
@@ -64,7 +64,7 @@ class MainFragment : PaddingPreferenceFragment() {
                 addDestinationPreference(
                     R.string.theme,
                     R.drawable.ic_baseline_palette_24,
-                    R.id.action_mainFragment_to_themeListFragment
+                    R.id.action_mainFragment_to_themeFragment
                 )
                 addDestinationPreference(
                     R.string.clipboard,

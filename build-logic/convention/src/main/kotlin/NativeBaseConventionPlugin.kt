@@ -10,7 +10,7 @@ open class NativeBaseConventionPlugin : Plugin<Project> {
 
     override fun apply(target: Project) {
         @Suppress("UnstableApiUsage")
-        target.extensions.configure<CommonExtension<*, *, *, *>>("android") {
+        target.extensions.configure<CommonExtension<*, *, *, *, *>>("android") {
             ndkVersion = target.ndkVersion
             defaultConfig {
                 minSdk = Versions.minSdk
@@ -29,12 +29,25 @@ open class NativeBaseConventionPlugin : Plugin<Project> {
                     path("src/main/cpp/CMakeLists.txt")
                 }
             }
-            splits {
-                abi {
-                    isEnable = true
-                    reset()
-                    include(target.buildABI)
-                    isUniversalApk = false
+            if (PlayRelease.run { target.buildPlayRelease }) {
+                // in this case, the version code of arm64-v8a will be used for the single production,
+                // unless `buildABI` is specified
+                defaultConfig {
+                    ndk {
+                        abiFilters.add("armeabi-v7a")
+                        abiFilters.add("arm64-v8a")
+                        abiFilters.add("x86")
+                        abiFilters.add("x86_64")
+                    }
+                }
+            } else {
+                splits {
+                    abi {
+                        isEnable = true
+                        reset()
+                        include(target.buildABI)
+                        isUniversalApk = false
+                    }
                 }
             }
         }

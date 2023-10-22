@@ -10,8 +10,6 @@
 
 #include "androidkeyboard.h"
 
-#define FCITX_KEYBOARD_MAX_BUFFER 20
-
 namespace fcitx {
 
 namespace {
@@ -85,7 +83,7 @@ void AndroidKeyboardEngine::keyEvent(const InputMethodEntry &entry, KeyEvent &ev
 
     // check if we can select candidate.
     if (auto candList = inputContext->inputPanel().candidateList()) {
-        int idx = key.keyListIndex(selectionKeys_);
+        const int idx = key.keyListIndex(selectionKeys_);
         if (idx >= 0 && idx < candList->size()) {
             event.filterAndAccept();
             candList->candidate(idx).select(inputContext);
@@ -93,9 +91,9 @@ void AndroidKeyboardEngine::keyEvent(const InputMethodEntry &entry, KeyEvent &ev
         }
     }
 
-    bool validSym = isValidSym(key);
+    const bool validSym = isValidSym(key);
 
-    static KeyList FCITX_HYPHEN_APOS = {Key(FcitxKey_minus), Key(FcitxKey_apostrophe)};
+    static const KeyList FCITX_HYPHEN_APOS = {Key(FcitxKey_minus), Key(FcitxKey_apostrophe)};
     // check for valid character
     if (key.isSimple() || validSym) {
         // prepend space before input next word
@@ -119,7 +117,7 @@ void AndroidKeyboardEngine::keyEvent(const InputMethodEntry &entry, KeyEvent &ev
             }
             return updateCandidate(entry, inputContext);
         }
-    } else if (key.check(FcitxKey_Delete)) {
+    } else if (key.check(FcitxKey_Delete) || key.check(FcitxKey_KP_Delete)) {
         if (buffer.del()) {
             event.filterAndAccept();
             if (buffer.empty()) {
@@ -173,7 +171,7 @@ std::vector<InputMethodEntry> AndroidKeyboardEngine::listInputMethods() {
 void AndroidKeyboardEngine::reloadConfig() {
     readAsIni(config_, ConfPath);
     selectionKeys_.clear();
-    KeySym syms[] = {
+    const std::array<KeySym, 10> syms{
             FcitxKey_1, FcitxKey_2, FcitxKey_3, FcitxKey_4, FcitxKey_5,
             FcitxKey_6, FcitxKey_7, FcitxKey_8, FcitxKey_9, FcitxKey_0,
     };
@@ -209,6 +207,7 @@ void AndroidKeyboardEngine::setConfig(const RawConfig &config) {
 }
 
 void AndroidKeyboardEngine::activate(const InputMethodEntry &entry, InputContextEvent &event) {
+    FCITX_UNUSED(entry);
     auto *inputContext = event.inputContext();
     wordHintAction_.setChecked(*config_.enableWordHint);
     wordHintAction_.update(inputContext);
@@ -226,6 +225,7 @@ void AndroidKeyboardEngine::deactivate(const InputMethodEntry &entry, InputConte
 }
 
 void AndroidKeyboardEngine::reset(const InputMethodEntry &entry, InputContextEvent &event) {
+    FCITX_UNUSED(entry);
     auto *inputContext = event.inputContext();
     resetState(inputContext);
     inputContext->inputPanel().reset();
@@ -250,7 +250,7 @@ void AndroidKeyboardEngine::updateCandidate(const InputMethodEntry &entry, Input
         results = spell()->call<ISpell::hintForDisplay>(entry.languageCode(),
                                                         SpellProvider::Default,
                                                         state->buffer_.userInput(),
-                                                        20);
+                                                        SpellCandidateSize);
     }
     auto candidateList = std::make_unique<CommonCandidateList>();
     for (const auto &result: results) {
@@ -265,10 +265,10 @@ void AndroidKeyboardEngine::updateCandidate(const InputMethodEntry &entry, Input
 }
 
 void AndroidKeyboardEngine::updateUI(InputContext *inputContext) {
-    auto *state = inputContext->propertyFor(&factory_);
-    Text preedit(preeditString(inputContext), TextFormatFlag::Underline);
-    preedit.setCursor(static_cast<int>(state->buffer_.cursorByChar()));
-    inputContext->inputPanel().setClientPreedit(preedit);
+    auto [preedit, cursor] = preeditWithCursor(inputContext);
+    Text clientPreedit(preedit, TextFormatFlag::Underline);
+    clientPreedit.setCursor(static_cast<int>(cursor));
+    inputContext->inputPanel().setClientPreedit(clientPreedit);
     // we don't want preedit here ...
 //    if (!inputContext->capabilityFlags().test(CapabilityFlag::Preedit)) {
 //        inputContext->inputPanel().setPreedit(preedit);
@@ -285,8 +285,7 @@ bool AndroidKeyboardEngine::updateBuffer(InputContext *inputContext, const std::
 
     auto *state = inputContext->propertyFor(&factory_);
     const CapabilityFlags noPredictFlag{CapabilityFlag::Password,
-                                        CapabilityFlag::NoSpellCheck,
-                                        CapabilityFlag::Sensitive};
+                                        CapabilityFlag::NoSpellCheck};
     // no spell hint enabled or no supported dictionary
     if (!*config_.enableWordHint ||
         inputContext->capabilityFlags().testAny(noPredictFlag) ||
@@ -295,7 +294,7 @@ bool AndroidKeyboardEngine::updateBuffer(InputContext *inputContext, const std::
     }
 
     auto &buffer = state->buffer_;
-    auto preedit = preeditString(inputContext);
+    auto [preedit, cursor] = preeditWithCursor(inputContext);
     if (preedit != buffer.userInput()) {
         buffer.clear();
         buffer.type(preedit);
@@ -303,7 +302,7 @@ bool AndroidKeyboardEngine::updateBuffer(InputContext *inputContext, const std::
 
     buffer.type(chr);
 
-    if (buffer.size() >= FCITX_KEYBOARD_MAX_BUFFER) {
+    if (buffer.size() >= MaxBufferSize) {
         commitBuffer(inputContext);
         return true;
     }
@@ -313,11 +312,15 @@ bool AndroidKeyboardEngine::updateBuffer(InputContext *inputContext, const std::
 }
 
 void AndroidKeyboardEngine::commitBuffer(InputContext *inputContext) {
-    auto preedit = preeditString(inputContext);
+    auto [preedit, cursor] = preeditWithCursor(inputContext);
     if (preedit.empty()) {
         return;
     }
-    inputContext->commitString(preedit);
+    if (inputContext->capabilityFlags().test(CapabilityFlag::CommitStringWithCursor)) {
+        inputContext->commitStringWithCursor(preedit, cursor);
+    } else {
+        inputContext->commitString(preedit);
+    }
     resetState(inputContext);
     inputContext->inputPanel().reset();
     inputContext->updatePreedit();
@@ -329,22 +332,22 @@ bool AndroidKeyboardEngine::supportHint(const std::string &language) {
     return hasSpell;
 }
 
-std::string AndroidKeyboardEngine::preeditString(InputContext *inputContext) {
+std::pair<std::string, size_t> AndroidKeyboardEngine::preeditWithCursor(InputContext *inputContext) {
     auto *state = inputContext->propertyFor(&factory_);
-    return state->buffer_.userInput();
+    return {state->buffer_.userInput(), state->buffer_.cursorByChar()};
 }
 
 void AndroidKeyboardEngine::invokeActionImpl(const InputMethodEntry &entry, InvokeActionEvent &event) {
-    size_t cursor = event.cursor();
+    const int cursor = event.cursor();
     auto inputContext = event.inputContext();
     auto *state = inputContext->propertyFor(&factory_);
     if (event.action() != InvokeActionEvent::Action::LeftClick
         || cursor < 0
-        || cursor > state->buffer_.size()) {
+        || static_cast<size_t>(cursor) > state->buffer_.size()) {
         return InputMethodEngineV3::invokeActionImpl(entry, event);
     }
     event.filter();
-    state->buffer_.setCursor(event.cursor());
+    state->buffer_.setCursor(static_cast<size_t>(cursor));
     updateUI(inputContext);
 }
 

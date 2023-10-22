@@ -9,11 +9,9 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.ViewGroup
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.core.os.bundleOf
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -23,6 +21,7 @@ import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupWithNavController
 import org.fcitx.fcitx5.android.R
+import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.databinding.ActivityMainBinding
 import org.fcitx.fcitx5.android.ui.main.settings.PinyinDictionaryFragment
 import org.fcitx.fcitx5.android.ui.setup.SetupActivity
@@ -30,8 +29,9 @@ import org.fcitx.fcitx5.android.utils.Const
 import org.fcitx.fcitx5.android.utils.applyTranslucentSystemBars
 import org.fcitx.fcitx5.android.utils.navigateFromMain
 import splitties.dimensions.dp
+import splitties.resources.drawable
+import splitties.resources.styledColor
 import splitties.views.topPadding
-import timber.log.Timber
 
 class MainActivity : AppCompatActivity() {
 
@@ -78,34 +78,29 @@ class MainActivity : AppCompatActivity() {
         }
         navController.addOnDestinationChangedListener { _, dest, _ ->
             when (dest.id) {
-                R.id.themeListFragment -> viewModel.disableToolbarShadow()
+                R.id.themeFragment -> viewModel.disableToolbarShadow()
                 else -> viewModel.enableToolbarShadow()
             }
         }
-        if (SetupActivity.shouldShowUp() && intent.action == Intent.ACTION_MAIN)
+        if (intent?.action == Intent.ACTION_MAIN && SetupActivity.shouldShowUp()) {
             startActivity(Intent(this, SetupActivity::class.java))
-        processIntent(intent)
-        requestNotificationPermission()
-    }
-
-    override fun onNewIntent(intent: Intent?) {
-        processIntent(intent)
-        super.onNewIntent(intent)
-        navController.handleDeepLink(intent)
+        } else {
+            processIntent(intent)
+        }
+        addOnNewIntentListener {
+            processIntent(it)
+        }
+        checkNotificationPermission()
     }
 
     private fun processIntent(intent: Intent?) {
-        listOf(::processAddDictIntent).firstOrNull { it(intent) }
-    }
-
-    private fun processAddDictIntent(intent: Intent?): Boolean {
-        if (intent != null && intent.action == Intent.ACTION_VIEW) {
+        if (intent?.action == Intent.ACTION_VIEW) {
             intent.data?.let {
                 AlertDialog.Builder(this)
                     .setTitle(R.string.pinyin_dict)
                     .setMessage(R.string.whether_import_dict)
                     .setNegativeButton(android.R.string.cancel) { _, _ -> }
-                    .setPositiveButton(R.string.import_) { _, _ ->
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
                         navController.navigateFromMain(
                             R.id.action_mainFragment_to_pinyinDictionaryFragment,
                             bundleOf(PinyinDictionaryFragment.INTENT_DATA_URI to it)
@@ -113,14 +108,14 @@ class MainActivity : AppCompatActivity() {
                     }
                     .show()
             }
-            return true
         }
-        return false
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean = menu.run {
         add(R.string.save).apply {
-            setIcon(R.drawable.ic_baseline_save_24)
+            icon = drawable(R.drawable.ic_baseline_save_24)!!.apply {
+                setTint(styledColor(android.R.attr.colorControlNormal))
+            }
             setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             viewModel.toolbarSaveButtonOnClickListener.apply {
                 observe(this@MainActivity) { listener -> isVisible = listener != null }
@@ -161,7 +156,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         add(R.string.edit).apply {
-            setIcon(R.drawable.ic_baseline_edit_24)
+            icon = drawable(R.drawable.ic_baseline_edit_24)!!.apply {
+                setTint(styledColor(android.R.attr.colorControlNormal))
+            }
             setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             viewModel.toolbarEditButtonVisible.apply {
                 observe(this@MainActivity) { isVisible = it }
@@ -174,7 +171,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         add(R.string.delete).apply {
-            setIcon(R.drawable.ic_baseline_delete_24)
+            icon = drawable(R.drawable.ic_baseline_delete_24)!!.apply {
+                setTint(styledColor(android.R.attr.colorControlNormal))
+            }
             setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             viewModel.toolbarDeleteButtonOnClickListener.apply {
                 observe(this@MainActivity) { listener -> isVisible = listener != null }
@@ -188,34 +187,49 @@ class MainActivity : AppCompatActivity() {
         true
     }
 
-    private val requestNotificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-            if (!it) {
-                AlertDialog.Builder(this)
-                    .setNeutralButton(android.R.string.ok, null)
-                    .setTitle(R.string.notification_permission_title)
-                    .setMessage(R.string.notification_permission_message)
-                    .setIcon(R.drawable.ic_baseline_info_24)
-                    .show()
-            }
-        }
+    private var needNotifications by AppPrefs.getInstance().internal.needNotifications
 
-    private fun requestNotificationPermission() {
+    private fun checkNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            when {
-                ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED -> {
-                }
-                shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS) -> {
-                    Timber.d("No notification permission")
-                }
-                else -> {
-                    requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                needNotifications = true
+                return
             }
+            // do not ask again if user denied the request
+            if (!needNotifications) return
+            // always show a dialog to explain why we need notification permission,
+            // regardless of `shouldShowRequestPermissionRationale(...)`
+            AlertDialog.Builder(this)
+                .setIconAttribute(android.R.attr.alertDialogIcon)
+                .setTitle(R.string.notification_permission_title)
+                .setMessage(R.string.notification_permission_message)
+                .setNegativeButton(R.string.i_do_not_need_it) { _, _ ->
+                    // do not ask again if user denied the request
+                    needNotifications = false
+                }
+                .setPositiveButton(R.string.grant_permission) { _, _ ->
+                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
+                }
+                .show()
         }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != 0) return
+        // do not ask again if user denied the request
+        needNotifications = grantResults.getOrNull(0) == PackageManager.PERMISSION_GRANTED
+    }
+
+    override fun onStop() {
+        viewModel.fcitx.runIfReady {
+            save()
+        }
+        super.onStop()
     }
 
 }

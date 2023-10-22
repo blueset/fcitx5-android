@@ -8,8 +8,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
@@ -25,6 +23,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -51,11 +50,33 @@ import splitties.resources.drawable
 import splitties.resources.resolveThemeAttribute
 import splitties.resources.styledColor
 import splitties.resources.styledDrawable
-import splitties.views.*
+import splitties.views.backgroundColor
+import splitties.views.bottomPadding
 import splitties.views.dsl.appcompat.switch
-import splitties.views.dsl.appcompat.toolbar
-import splitties.views.dsl.constraintlayout.*
-import splitties.views.dsl.core.*
+import splitties.views.dsl.constraintlayout.above
+import splitties.views.dsl.constraintlayout.before
+import splitties.views.dsl.constraintlayout.below
+import splitties.views.dsl.constraintlayout.bottomOfParent
+import splitties.views.dsl.constraintlayout.centerHorizontally
+import splitties.views.dsl.constraintlayout.constraintLayout
+import splitties.views.dsl.constraintlayout.endOfParent
+import splitties.views.dsl.constraintlayout.lParams
+import splitties.views.dsl.constraintlayout.matchConstraints
+import splitties.views.dsl.constraintlayout.packed
+import splitties.views.dsl.constraintlayout.startOfParent
+import splitties.views.dsl.constraintlayout.topOfParent
+import splitties.views.dsl.constraintlayout.topToTopOf
+import splitties.views.dsl.core.add
+import splitties.views.dsl.core.matchParent
+import splitties.views.dsl.core.seekBar
+import splitties.views.dsl.core.textView
+import splitties.views.dsl.core.view
+import splitties.views.dsl.core.wrapContent
+import splitties.views.dsl.core.wrapInScrollView
+import splitties.views.gravityVerticalCenter
+import splitties.views.horizontalPadding
+import splitties.views.textAppearance
+import splitties.views.topPadding
 import java.io.File
 
 class CustomThemeActivity : AppCompatActivity() {
@@ -82,7 +103,7 @@ class CustomThemeActivity : AppCompatActivity() {
     }
 
     private val toolbar by lazy {
-        toolbar {
+        view(::Toolbar) {
             backgroundColor = styledColor(android.R.attr.colorPrimary)
             elevation = dp(4f)
         }
@@ -106,7 +127,10 @@ class CustomThemeActivity : AppCompatActivity() {
         createTextView(R.string.dark_keys, ripple = true)
     }
     private val variantSwitch by lazy {
-        switch { }
+        switch {
+            // Use dark keys by default
+            isChecked = false
+        }
     }
 
     private val brightnessLabel by lazy {
@@ -253,31 +277,10 @@ class CustomThemeActivity : AppCompatActivity() {
                 croppedImageFile = c
                 srcImageFile = s
             }
-            theme =
-                (if (variantSwitch.isChecked) ThemePreset.TransparentLight else ThemePreset.TransparentDark)
-                    .deriveCustomBackground(n, c.path, s.path)
+            // Use dark keys by default
+            theme = ThemePreset.TransparentDark.deriveCustomBackground(n, c.path, s.path)
         }
         previewUi = KeyboardPreviewUi(this, theme)
-        whenHasBackground {
-            cropLabel.setOnClickListener {
-                launchCrop(previewUi.intrinsicWidth, previewUi.intrinsicHeight)
-            }
-            variantLabel.setOnClickListener {
-                variantSwitch.isChecked = !variantSwitch.isChecked
-            }
-            variantSwitch.setOnCheckedChangeListener { _, isChecked ->
-                setKeyVariant(it, darkKeys = isChecked)
-            }
-            brightnessSeekBar.setOnSeekBarChangeListener(object :
-                SeekBar.OnSeekBarChangeListener {
-                override fun onStartTrackingTouch(bar: SeekBar) {}
-                override fun onStopTrackingTouch(bar: SeekBar) {}
-
-                override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
-                    if (fromUser) updateState()
-                }
-            })
-        }
         if (theme.backgroundImage == null) {
             brightnessLabel.visibility = View.GONE
             cropLabel.visibility = View.GONE
@@ -330,6 +333,25 @@ class CustomThemeActivity : AppCompatActivity() {
                     updateState()
                 }
             }
+            cropLabel.setOnClickListener {
+                launchCrop(previewUi.intrinsicWidth, previewUi.intrinsicHeight)
+            }
+            variantLabel.setOnClickListener {
+                variantSwitch.isChecked = !variantSwitch.isChecked
+            }
+            // attach OnCheckedChangeListener after calling setChecked (isChecked in kotlin)
+            variantSwitch.setOnCheckedChangeListener { _, isChecked ->
+                setKeyVariant(background, darkKeys = isChecked)
+            }
+            brightnessSeekBar.setOnSeekBarChangeListener(object :
+                SeekBar.OnSeekBarChangeListener {
+                override fun onStartTrackingTouch(bar: SeekBar) {}
+                override fun onStopTrackingTouch(bar: SeekBar) {}
+
+                override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
+                    if (fromUser) updateState()
+                }
+            })
         }
 
         if (newCreated) {
@@ -474,8 +496,7 @@ class CustomThemeActivity : AppCompatActivity() {
         if (!newCreated) {
             menu.add(R.string.delete).apply {
                 icon = drawable(R.drawable.ic_baseline_delete_24)!!.apply {
-                    colorFilter =
-                        PorterDuffColorFilter(color(R.color.red_400), PorterDuff.Mode.SRC_IN)
+                    setTint(color(R.color.red_400))
                 }
                 setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
                 setOnMenuItemClickListener {
@@ -485,7 +506,9 @@ class CustomThemeActivity : AppCompatActivity() {
             }
         }
         menu.add(R.string.save).apply {
-            setIcon(R.drawable.ic_baseline_done_24)
+            icon = drawable(R.drawable.ic_baseline_done_24)!!.apply {
+                setTint(styledColor(android.R.attr.colorControlNormal))
+            }
             setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             setOnMenuItemClickListener {
                 done()

@@ -1,12 +1,11 @@
 package org.fcitx.fcitx5.android.ui.common
 
 import android.content.Context
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffColorFilter
 import android.view.View
 import android.view.ViewGroup
 import android.widget.CheckBox
 import android.widget.ImageButton
+import androidx.activity.OnBackPressedDispatcher
 import androidx.appcompat.app.AlertDialog
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.*
@@ -19,6 +18,7 @@ import com.google.android.material.snackbar.BaseTransientBottomBar
 import com.google.android.material.snackbar.Snackbar
 import org.fcitx.fcitx5.android.R
 import splitties.dimensions.dp
+import splitties.resources.drawable
 import splitties.resources.styledColor
 import splitties.views.backgroundColor
 import splitties.views.bottomPadding
@@ -28,7 +28,7 @@ import splitties.views.dsl.coordinatorlayout.defaultLParams
 import splitties.views.dsl.core.*
 import splitties.views.dsl.recyclerview.recyclerView
 import splitties.views.gravityEndBottom
-import splitties.views.imageResource
+import splitties.views.imageDrawable
 import splitties.views.recyclerview.verticalLayoutManager
 import kotlin.math.min
 
@@ -49,11 +49,12 @@ abstract class BaseDynamicListUi<T>(
         initSettingsButton
     ) {
 
+    protected var shouldShowFab = false
+
     protected val fab = view(::FloatingActionButton) {
-        imageResource = R.drawable.ic_baseline_plus_24
-        colorFilter = PorterDuffColorFilter(
-            styledColor(android.R.attr.colorForegroundInverse), PorterDuff.Mode.SRC_IN
-        )
+        imageDrawable = drawable(R.drawable.ic_baseline_plus_24)!!.apply {
+            setTint(styledColor(android.R.attr.colorForegroundInverse))
+        }
     }
 
     sealed class Mode<T> {
@@ -85,8 +86,15 @@ abstract class BaseDynamicListUi<T>(
         }
     }
 
-
+    /**
+     * whether to show "undo" snackbar after item update
+     */
     var enableUndo = true
+
+    /**
+     * suspend "undo" snackbar temporarily to prevent undo undo
+     */
+    private var suspendUndo = false
 
     init {
         initEditButton = when (mode) {
@@ -127,13 +135,23 @@ abstract class BaseDynamicListUi<T>(
 
             override fun onItemRemovedBatch(indexed: List<Pair<Int, T>>) {
                 updateFAB()
+                showUndoSnackbar(ctx.getString(R.string.removed_n_items, indexed.size)) {
+                    indexed.sortedBy { it.first }.forEach {
+                        addItem(it.first, it.second)
+                    }
+                }
             }
         })
     }
 
-    private fun showUndoSnackbar(text: String, action: View.OnClickListener) {
+    private fun showUndoSnackbar(text: String, action: () -> Unit) {
+        if (!enableUndo || suspendUndo) return
         Snackbar.make(root, text, Snackbar.LENGTH_SHORT)
-            .apply { if (enableUndo) setAction(R.string.undo, action) }
+            .setAction(R.string.undo) {
+                suspendUndo = true
+                action.invoke()
+                suspendUndo = false
+            }
             .addCallback(object : BaseTransientBottomBar.BaseCallback<Snackbar>() {
                 override fun onShown(transientBottomBar: Snackbar) {
                     // snackbar is invisible when it attached to parent,
@@ -151,8 +169,10 @@ abstract class BaseDynamicListUi<T>(
             is Mode.ChooseOne -> {
                 val candidatesSource = mode.candidatesSource(this)
                 if (candidatesSource.isEmpty()) {
+                    shouldShowFab = false
                     fab.hide()
                 } else {
+                    shouldShowFab = true
                     fab.show()
                     fab.setOnClickListener {
                         val items = candidatesSource.map { showEntry(it) }.toTypedArray()
@@ -164,15 +184,33 @@ abstract class BaseDynamicListUi<T>(
                 }
             }
             is Mode.FreeAdd -> {
+                shouldShowFab = true
                 fab.show()
                 fab.setOnClickListener {
                     showEditDialog(ctx.getString(R.string.add)) { addItem(item = it) }
                 }
             }
-            is Mode.Immutable -> fab.hide()
+            is Mode.Immutable -> {
+                shouldShowFab = false
+                fab.hide()
+            }
             is Mode.Custom -> {
             }
         }
+    }
+
+    override fun enterMultiSelect(onBackPressedDispatcher: OnBackPressedDispatcher) {
+        if (shouldShowFab) {
+            fab.hide()
+        }
+        super.enterMultiSelect(onBackPressedDispatcher)
+    }
+
+    override fun exitMultiSelect() {
+        if (shouldShowFab) {
+            fab.show()
+        }
+        super.exitMultiSelect()
     }
 
     open fun showEditDialog(

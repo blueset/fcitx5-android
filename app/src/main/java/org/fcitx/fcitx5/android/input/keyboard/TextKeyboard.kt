@@ -11,8 +11,6 @@ import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.input.popup.PopupAction
-import splitties.resources.drawable
-import splitties.views.imageDrawable
 import splitties.views.imageResource
 
 @SuppressLint("ViewConstructor")
@@ -62,16 +60,16 @@ class TextKeyboard(
 //                BackspaceKey()
 //            ),
             listOf(
-                AlphabetDigitKey("Q", 1),
-                AlphabetDigitKey("W", 2),
-                AlphabetDigitKey("F", 3),
-                AlphabetDigitKey("P", 4),
-                AlphabetDigitKey("G", 5),
-                AlphabetDigitKey("J", 6),
-                AlphabetDigitKey("L", 7),
-                AlphabetDigitKey("U", 8),
-                AlphabetDigitKey("Y", 9),
-                AlphabetDigitKey(";", 0)
+                AlphabetKey("Q", "1"),
+                AlphabetKey("W", "2"),
+                AlphabetKey("F", "3"),
+                AlphabetKey("P", "4"),
+                AlphabetKey("G", "5"),
+                AlphabetKey("J", "6"),
+                AlphabetKey("L", "7"),
+                AlphabetKey("U", "8"),
+                AlphabetKey("Y", "9"),
+                AlphabetKey(";", "0")
             ),
             listOf(
                 AlphabetKey("A", "@"),
@@ -220,13 +218,11 @@ class TextKeyboard(
 
     private fun updateCapsButtonIcon() {
         caps.img.apply {
-            imageDrawable = drawable(
-                when (capsState) {
-                    CapsState.None -> R.drawable.ic_capslock_none
-                    CapsState.Once -> R.drawable.ic_capslock_once
-                    CapsState.Lock -> R.drawable.ic_capslock_lock
-                }
-            )
+            imageResource = when (capsState) {
+                CapsState.None -> R.drawable.ic_capslock_none
+                CapsState.Once -> R.drawable.ic_capslock_once
+                CapsState.Lock -> R.drawable.ic_capslock_lock
+            }
         }
     }
 

@@ -102,6 +102,7 @@ public:
     jmethodID BooleanInit;
 
     jclass Fcitx;
+    jmethodID ShowToast;
     jmethodID HandleFcitxEvent;
 
     jclass InputMethodEntry;
@@ -127,6 +128,12 @@ public:
     jclass FormattedText;
     jmethodID FormattedTextFromByteCursor;
 
+    jclass PinyinCustomPhrase;
+    jmethodID PinyinCustomPhraseInit;
+    jfieldID PinyinCustomPhraseKey;
+    jfieldID PinyinCustomPhraseOrder;
+    jfieldID PinyinCustomPhraseValue;
+
     GlobalRefSingleton(JavaVM *jvm_) : jvm(jvm_) {
         JNIEnv *env;
         jvm->AttachCurrentThread(&env, nullptr);
@@ -142,6 +149,7 @@ public:
         BooleanInit = env->GetMethodID(Boolean, "<init>", "(Z)V");
 
         Fcitx = reinterpret_cast<jclass>(env->NewGlobalRef(env->FindClass("org/fcitx/fcitx5/android/core/Fcitx")));
+        ShowToast = env->GetStaticMethodID(Fcitx, "showToast", "(Ljava/lang/String;)V");
         HandleFcitxEvent = env->GetStaticMethodID(Fcitx, "handleFcitxEvent", "(I[Ljava/lang/Object;)V");
 
         InputMethodEntry = reinterpret_cast<jclass>(env->NewGlobalRef(env->FindClass("org/fcitx/fcitx5/android/core/InputMethodEntry")));
@@ -166,6 +174,12 @@ public:
 
         FormattedText = reinterpret_cast<jclass>(env->NewGlobalRef(env->FindClass("org/fcitx/fcitx5/android/core/FormattedText")));
         FormattedTextFromByteCursor = env->GetStaticMethodID(FormattedText, "fromByteCursor", "([Ljava/lang/String;[II)Lorg/fcitx/fcitx5/android/core/FormattedText;");
+
+        PinyinCustomPhrase = reinterpret_cast<jclass>(env->NewGlobalRef(env->FindClass("org/fcitx/fcitx5/android/data/pinyin/customphrase/PinyinCustomPhrase")));
+        PinyinCustomPhraseInit = env->GetMethodID(PinyinCustomPhrase, "<init>", "(Ljava/lang/String;ILjava/lang/String;)V");
+        PinyinCustomPhraseKey = env->GetFieldID(PinyinCustomPhrase, "key", "Ljava/lang/String;");
+        PinyinCustomPhraseOrder = env->GetFieldID(PinyinCustomPhrase, "order", "I");
+        PinyinCustomPhraseValue = env->GetFieldID(PinyinCustomPhrase, "value", "Ljava/lang/String;");
     }
 
     const JEnv AttachEnv() const { return JEnv(jvm); }

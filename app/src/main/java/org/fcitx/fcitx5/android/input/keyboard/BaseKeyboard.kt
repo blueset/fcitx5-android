@@ -8,10 +8,12 @@ import androidx.annotation.CallSuper
 import androidx.annotation.DrawableRes
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.children
+import androidx.core.view.updateLayoutParams
 import org.fcitx.fcitx5.android.core.FcitxKeyMapping
 import org.fcitx.fcitx5.android.core.InputMethodEntry
 import org.fcitx.fcitx5.android.core.KeyStates
 import org.fcitx.fcitx5.android.core.KeySym
+import org.fcitx.fcitx5.android.data.InputFeedbacks
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView.GestureType
@@ -44,10 +46,13 @@ abstract class BaseKeyboard(
 
     var keyActionListener: KeyActionListener? = null
 
-    private val popupOnKeyPress by AppPrefs.getInstance().keyboard.popupOnKeyPress
-    private val swipeSymbolDirection by AppPrefs.getInstance().keyboard.swipeSymbolDirection
+    private val prefs = AppPrefs.getInstance()
 
-    private val vivoKeypressWorkaround by AppPrefs.getInstance().advanced.vivoKeypressWorkaround
+    private val popupOnKeyPress by prefs.keyboard.popupOnKeyPress
+    private val expandKeypressArea by prefs.keyboard.expandKeypressArea
+    private val swipeSymbolDirection by prefs.keyboard.swipeSymbolDirection
+
+    private val vivoKeypressWorkaround by prefs.advanced.vivoKeypressWorkaround
 
     var popupActionListener: PopupActionListener? = null
 
@@ -70,6 +75,7 @@ abstract class BaseKeyboard(
         keyRows = keyLayout.map { row ->
             val keyViews = row.map(::createKeyView)
             constraintLayout Row@{
+                var totalWidth = 0f
                 keyViews.forEachIndexed { index, view ->
                     add(view, lParams {
                         centerVertically()
@@ -89,6 +95,25 @@ abstract class BaseKeyboard(
                         val def = row[index]
                         matchConstraintPercentWidth = def.appearance.percentWidth
                     })
+                    row[index].appearance.percentWidth.let {
+                        // 0f means fill remaining space, thus does not need expanding
+                        totalWidth += if (it != 0f) it else 1f
+                    }
+                }
+                if (expandKeypressArea && totalWidth < 1f) {
+                    val free = (1f - totalWidth) / 2f
+                    keyViews.first().apply {
+                        updateLayoutParams<LayoutParams> {
+                            matchConstraintPercentWidth += free
+                        }
+                        layoutMarginLeft = free / (row.first().appearance.percentWidth + free)
+                    }
+                    keyViews.last().apply {
+                        updateLayoutParams<LayoutParams> {
+                            matchConstraintPercentWidth += free
+                        }
+                        layoutMarginRight = free / (row.last().appearance.percentWidth + free)
+                    }
                 }
             }
         }
@@ -106,9 +131,17 @@ abstract class BaseKeyboard(
     private fun createKeyView(def: KeyDef): KeyView {
         return when (def.appearance) {
             is KeyDef.Appearance.AltText -> AltTextKeyView(context, theme, def.appearance)
+            is KeyDef.Appearance.ImageText -> ImageTextKeyView(context, theme, def.appearance)
             is KeyDef.Appearance.Text -> TextKeyView(context, theme, def.appearance)
             is KeyDef.Appearance.Image -> ImageKeyView(context, theme, def.appearance)
         }.apply {
+            soundEffect = when (def) {
+                is SpaceKey -> InputFeedbacks.SoundEffect.SpaceBar
+                is MiniSpaceKey -> InputFeedbacks.SoundEffect.SpaceBar
+                is BackspaceKey -> InputFeedbacks.SoundEffect.Delete
+                is ReturnKey -> InputFeedbacks.SoundEffect.Return
+                else -> InputFeedbacks.SoundEffect.Standard
+            }
             if (def is SpaceKey) {
                 swipeEnabled = true
                 swipeRepeatEnabled = true

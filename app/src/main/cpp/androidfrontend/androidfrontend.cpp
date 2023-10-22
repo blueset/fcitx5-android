@@ -10,13 +10,13 @@
 
 namespace fcitx {
 
-class AndroidInputContext : public InputContext {
+class AndroidInputContext : public InputContextV2 {
 public:
     AndroidInputContext(AndroidFrontend *frontend,
                         InputContextManager &inputContextManager,
                         int uid,
                         const std::string &pkgName)
-            : InputContext(inputContextManager, pkgName),
+            : InputContextV2(inputContextManager, pkgName),
               frontend_(frontend),
               uid_(uid) {
         created();
@@ -30,7 +30,11 @@ public:
     [[nodiscard]] const char *frontend() const override { return "androidfrontend"; }
 
     void commitStringImpl(const std::string &text) override {
-        frontend_->commitString(text);
+        frontend_->commitString(text, -1);
+    }
+
+    void commitStringWithCursorImpl(const std::string &text, size_t cursor) override {
+        frontend_->commitString(text, static_cast<int>(cursor));
     }
 
     void forwardKeyImpl(const ForwardKeyEvent &key) override {
@@ -38,11 +42,17 @@ public:
     }
 
     void deleteSurroundingTextImpl(int offset, unsigned int size) override {
-        FCITX_INFO() << "DeleteSurrounding: " << offset << " " << size;
+        const int before = -offset;
+        const int after = offset + static_cast<int>(size);
+        if (before < 0 || after < 0) {
+            FCITX_WARN() << "Invalid deleteSurrounding request: offset=" << offset << ", size=" << size;
+            return;
+        }
+        frontend_->deleteSurrounding(before, after);
     }
 
     void updatePreeditImpl() override {
-        checkClientPreeditUpdate();
+        frontend_->updateClientPreedit(filterText(inputPanel().clientPreedit()));
     }
 
     void updateInputPanel() {
@@ -52,10 +62,10 @@ public:
         // However on Android, androidkeyboard uses clientPreedit unconditionally in order to provide
         // a more integrated experience, so we need to check clientPreedit update manually even if
         // clientPreedit is not enabled.
-        if (!isPreeditEnabled()) {
-            checkClientPreeditUpdate();
+        const InputPanel &ip = inputPanel();
+        if (!isPreeditEnabled() && frontend_->instance()->inputMethod(this) == "keyboard-us") {
+            frontend_->updateClientPreedit(filterText(ip.clientPreedit()));
         }
-        InputPanel &ip = inputPanel();
         frontend_->updateInputPanel(
                 filterText(ip.preedit()),
                 filterText(ip.auxUp()),
@@ -69,12 +79,17 @@ public:
             if (bulk) {
                 size = bulk->totalSize();
                 // limit candidate count to 16 (for paging)
-                const int limit = std::min(size, 16);
+                const int limit = size < 0 ? 16 : std::min(size, 16);
                 for (int i = 0; i < limit; i++) {
-                    auto &candidate = bulk->candidateFromAll(i);
-                    // maybe unnecessary; I don't see anywhere using `CandidateWord::setPlaceHolder`
-                    // if (candidate.isPlaceHolder()) continue;
-                    candidates.emplace_back(filterString(candidate.text()));
+                    try {
+                        auto &candidate = bulk->candidateFromAll(i);
+                        // maybe unnecessary; I don't see anywhere using `CandidateWord::setPlaceHolder`
+                        // if (candidate.isPlaceHolder()) continue;
+                        candidates.emplace_back(filterString(candidate.text()));
+                    } catch (const std::invalid_argument &e) {
+                        size = static_cast<int>(candidates.size());
+                        break;
+                    }
                 }
             } else {
                 size = list->size();
@@ -109,16 +124,22 @@ public:
         std::vector<std::string> candidates;
         const auto &list = inputPanel().candidateList();
         if (list) {
+            const int last = offset + limit;
             const auto &bulk = list->toBulk();
             if (bulk) {
-                const int _limit = std::min(bulk->totalSize(), offset + limit);
-                for (int i = offset; i < _limit; i++) {
-                    auto &candidate = bulk->candidateFromAll(i);
-                    candidates.emplace_back(filterString(candidate.text()));
+                const int totalSize = bulk->totalSize();
+                const int end = totalSize < 0 ? last : std::min(totalSize, last);
+                for (int i = offset; i < end; i++) {
+                    try {
+                        auto &candidate = bulk->candidateFromAll(i);
+                        candidates.emplace_back(filterString(candidate.text()));
+                    } catch (const std::invalid_argument &e) {
+                        break;
+                    }
                 }
             } else {
-                const int _limit = std::min(list->size(), offset + limit);
-                for (int i = offset; i < _limit; i++) {
+                const int end = std::min(list->size(), last);
+                for (int i = offset; i < end; i++) {
                     candidates.emplace_back(filterString(list->candidate(i).text()));
                 }
             }
@@ -129,17 +150,6 @@ public:
 private:
     AndroidFrontend *frontend_;
     int uid_;
-
-    bool clientPreeditEmpty_ = true;
-
-    void checkClientPreeditUpdate() {
-        const auto &clientPreedit = filterText(inputPanel().clientPreedit());
-        bool empty = clientPreedit.empty();
-        // skip update if new and old clientPreedit are both empty
-        if (empty && clientPreeditEmpty_) return;
-        clientPreeditEmpty_ = empty;
-        frontend_->updateClientPreedit(clientPreedit);
-    }
 
     inline Text filterText(const Text &orig) {
         return frontend_->instance()->outputFilter(this, orig);
@@ -161,7 +171,10 @@ AndroidFrontend::AndroidFrontend(Instance *instance)
     eventHandlers_.emplace_back(instance_->watchEvent(
             EventType::InputContextInputMethodActivated,
             EventWatcherPhase::Default,
-            [this](Event &event) { imChangeCallback(); }
+            [this](Event &event) {
+                FCITX_UNUSED(event);
+                imChangeCallback();
+            }
     ));
     eventHandlers_.emplace_back(instance_->watchEvent(
             EventType::InputContextUpdateUI,
@@ -199,8 +212,8 @@ void AndroidFrontend::forwardKey(const Key &key, bool isRelease) {
     keyEventCallback(sym, key.states(), Key::keySymToUnicode(sym), isRelease, -1);
 }
 
-void AndroidFrontend::commitString(const std::string &str) {
-    commitStringCallback(str);
+void AndroidFrontend::commitString(const std::string &str, const int cursor) {
+    commitStringCallback(str, cursor);
 }
 
 void AndroidFrontend::updateCandidateList(const std::vector<std::string> &candidates, const int size) {
@@ -240,9 +253,8 @@ void AndroidFrontend::resetInputContext() {
 void AndroidFrontend::repositionCursor(int position) {
     auto *ic = focusGroup_.focusedInputContext();
     if (!ic) return;
-    auto engine = instance_->inputMethodEngine(ic);
     InvokeActionEvent event(InvokeActionEvent::Action::LeftClick, position, ic);
-    engine->invokeAction(*(instance_->inputMethodEntry(ic)), event);
+    ic->invokeAction(event);
 }
 
 void AndroidFrontend::focusInputContext(bool focus) {
@@ -294,6 +306,14 @@ std::vector<std::string> AndroidFrontend::getCandidates(const int offset, const 
     return ic->getCandidates(offset, limit);
 }
 
+void AndroidFrontend::deleteSurrounding(const int before, const int after) {
+    deleteSurroundingCallback(before, after);
+}
+
+void AndroidFrontend::showToast(const std::string &s) {
+    toastCallback(s);
+}
+
 void AndroidFrontend::setCommitStringCallback(const CommitStringCallback &callback) {
     commitStringCallback = callback;
 }
@@ -327,6 +347,14 @@ void AndroidFrontend::handleStatusAreaUpdate() {
         statusAreaDefer_ = nullptr;
         return true;
     });
+}
+
+void AndroidFrontend::setDeleteSurroundingCallback(const DeleteSurroundingCallback &callback) {
+    deleteSurroundingCallback = callback;
+}
+
+void AndroidFrontend::setToastCallback(const ToastCallback &callback) {
+    toastCallback = callback;
 }
 
 class AndroidFrontendFactory : public AddonFactory {

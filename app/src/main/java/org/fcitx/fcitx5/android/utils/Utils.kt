@@ -9,13 +9,13 @@ import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
-import android.inputmethodservice.InputMethodService
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import android.os.Parcelable
 import android.provider.OpenableColumns
+import android.provider.Settings
 import android.util.TypedValue
 import android.view.View
 import android.view.inputmethod.InputConnection
@@ -24,6 +24,7 @@ import android.widget.SeekBar
 import android.widget.Toast
 import androidx.annotation.AttrRes
 import androidx.annotation.IdRes
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.graphics.ColorUtils
@@ -35,7 +36,6 @@ import androidx.fragment.app.FragmentManager
 import androidx.navigation.NavController
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
-import arrow.core.toOption
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.fcitx.fcitx5.android.FcitxApplication
@@ -46,15 +46,13 @@ import splitties.views.bottomPadding
 import java.io.File
 import java.io.Serializable
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Collections
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import java.util.WeakHashMap
 import java.util.zip.ZipInputStream
-import kotlin.contracts.ExperimentalContracts
-import kotlin.contracts.InvocationKind
-import kotlin.contracts.contract
 import kotlin.math.roundToInt
-
-val InputMethodService.inputConnection: InputConnection?
-    get() = currentInputConnection
 
 fun ViewPager2.getCurrentFragment(fragmentManager: FragmentManager): Fragment? =
     fragmentManager.findFragmentByTag("f$currentItem")
@@ -62,15 +60,20 @@ fun ViewPager2.getCurrentFragment(fragmentManager: FragmentManager): Fragment? =
 val appContext: Context
     get() = FcitxApplication.getInstance().applicationContext
 
-fun Uri.queryFileName(contentResolver: ContentResolver) =
-    contentResolver.query(
-        this,
-        null, null, null, null
-    )?.use {
+fun Context.toast(string: String, duration: Int = Toast.LENGTH_SHORT) {
+    Toast.makeText(this, string, duration).show()
+}
+
+fun Context.toast(@StringRes resId: Int, duration: Int = Toast.LENGTH_SHORT) {
+    toast(getString(resId), duration)
+}
+
+fun ContentResolver.queryFileName(uri: Uri) =
+    query(uri, null, null, null, null)?.use {
         val index = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
         it.moveToFirst()
         it.getString(index)
-    }.toOption()
+    }
 
 val EditText.str: String get() = editableText.toString()
 
@@ -94,7 +97,7 @@ fun formatDateTime(timeMillis: Long? = null): String =
     SimpleDateFormat.getDateTimeInstance().format(timeMillis?.let { Date(it) } ?: Date())
 
 private val iso8601DateFormat by lazy {
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 }
@@ -123,10 +126,7 @@ inline fun <T, U> kotlin.reflect.KFunction1<T, U>.upcast(): (T) -> U = this
 inline fun <T> T.identity() = arrow.core.identity(this)
 
 fun Configuration.isDarkMode() =
-    when (uiMode.and(Configuration.UI_MODE_NIGHT_MASK)) {
-        Configuration.UI_MODE_NIGHT_YES -> true
-        else -> false
-    }
+    uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
 
 fun Activity.applyTranslucentSystemBars() {
     WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -147,18 +147,6 @@ fun RecyclerView.applyNavBarInsetsBottomPadding() {
             bottomPadding = it.bottom
         }
         windowInsets
-    }
-}
-
-@OptIn(ExperimentalContracts::class)
-inline fun <T : Any, U> Result<T?>.bindOnNotNull(block: (T) -> Result<U>): Result<U>? {
-    contract {
-        callsInPlace(block, InvocationKind.AT_MOST_ONCE)
-    }
-    return when {
-        isSuccess && getOrThrow() != null -> block(getOrThrow()!!)
-        isSuccess && getOrThrow() == null -> null
-        else -> Result.failure(exceptionOrNull()!!)
     }
 }
 
@@ -230,24 +218,42 @@ fun SeekBar.setOnChangeListener(listener: SeekBar.(progress: Int) -> Unit) {
 
 @SuppressLint("PrivateApi")
 fun getSystemProperty(key: String): String {
-    return Class.forName("android.os.SystemProperties")
-        .getMethod("get", String::class.java)
-        .invoke(null, key) as String
+    return try {
+        Class.forName("android.os.SystemProperties")
+            .getMethod("get", String::class.java)
+            .invoke(null, key) as String
+    } catch (e: Exception) {
+        ""
+    }
 }
 
+fun isSystemSettingEnabled(key: String): Boolean {
+    return try {
+        Settings.System.getInt(appContext.contentResolver, key) == 1
+    } catch (e: Exception) {
+        false
+    }
+}
+
+/**
+ * @return top-level files in zip file
+ */
 fun ZipInputStream.extract(destDir: File): List<File> {
-    val extracted = mutableListOf<File>()
     var entry = nextEntry
     val canonicalDest = destDir.canonicalPath
-    while (entry != null && !entry.isDirectory) {
-        val file = File(destDir, entry.name)
-        if (!file.canonicalPath.startsWith(canonicalDest))
-            throw SecurityException()
-        copyTo(file.outputStream())
-        extracted.add(file)
+    while (entry != null) {
+        if (!entry.isDirectory) {
+            val file = File(destDir, entry.name)
+            if (!file.canonicalPath.startsWith(canonicalDest))
+                throw SecurityException()
+            copyTo(file.outputStream())
+        } else {
+            val dir = File(destDir, entry.name)
+            dir.mkdir()
+        }
         entry = nextEntry
     }
-    return extracted
+    return destDir.listFiles()?.toList() ?: emptyList()
 }
 
 inline fun <T> withTempDir(block: (File) -> T): T {
@@ -265,3 +271,9 @@ inline fun <T> withTempDir(block: (File) -> T): T {
 fun <T> WeakHashSet(): MutableSet<T> = Collections.newSetFromMap(WeakHashMap<T, Boolean>())
 
 val javaIdRegex = Regex("(?:\\b[_a-zA-Z]|\\B\\$)\\w*+")
+
+fun InputConnection.withBatchEdit(block: InputConnection.() -> Unit) {
+    beginBatchEdit()
+    block.invoke(this)
+    endBatchEdit()
+}
