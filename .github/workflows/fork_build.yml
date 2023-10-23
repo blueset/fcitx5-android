@@ -66,18 +66,18 @@ jobs:
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
 
-      - name: Build Debug APK
+      - name: Build APKs
         run: |
           ./gradlew :app:assembleDebug
           ./gradlew :app:assembleRelease
           ./gradlew :assembleDebugPlugins
           ./gradlew :assembleReleasePlugins
-      - name: Upload app
+      - name: Upload debug app
         uses: actions/upload-artifact@v3
         with:
           name: app-${{ matrix.os }}-${{ matrix.abi }}
           path: app/build/outputs/apk/debug/
-      - name: Upload debug app
+      - name: Upload release app
         uses: actions/upload-artifact@v3
         with:
           name: app-${{ matrix.os }}-${{ matrix.abi }}-release
@@ -87,29 +87,23 @@ jobs:
         run: |
           mkdir plugins-to-upload
           mkdir plugins-to-upload-release
+          mkdir apk-to-sign
           mkdir signed-apks
+          cp app/build/outputs/apk/release/*.apk "apk-to-sign"
           for i in $(ls plugin)
           do
             if [ -d "plugin/${i}" ]
             then
               mv "plugin/${i}/build/outputs/apk/debug" "plugins-to-upload/${i}"
               mv "plugin/${i}/build/outputs/apk/release" "plugins-to-upload-release/${i}-release"
+              cp "plugins-to-upload-release/${i}-release/"*.apk "apk-to-sign"
             fi
           done
       - uses: Tlaster/android-sign@v1.2.2
         name: Sign APKs
         id: sign_apks
         with:
-          releaseDirectory: app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          output: signed-apks/
-      - uses: Tlaster/android-sign@v1.2.2
-        name: Sign APKs
-        id: sign_plugin_apks
-        with:
-          releaseDirectory: plugins-to-upload-release
+          releaseDirectory: apk-to-sign
           signingKeyBase64: ${{ secrets.SIGNING_KEY }}
           alias: ${{ secrets.ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
