@@ -96,7 +96,7 @@ jobs:
               mv "plugin/${i}/build/outputs/apk/release" "plugins-to-upload-release/${i}-release"
             fi
           done
-      - uses: Tlaster/android-sign@v1
+      - uses: Tlaster/android-sign@v1.2.2
         name: Sign APKs
         id: sign_apks
         with:
