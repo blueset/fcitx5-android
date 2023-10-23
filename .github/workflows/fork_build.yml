@@ -100,9 +100,16 @@ jobs:
         name: Sign APKs
         id: sign_apks
         with:
-          releaseDirectory: |
-            app/build/outputs/apk/release
-            plugins-to-upload-release/
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          output: signed-apks/
+      - uses: Tlaster/android-sign@v1.2.2
+        name: Sign APKs
+        id: sign_plugin_apks
+        with:
+          releaseDirectory: plugins-to-upload-release
           signingKeyBase64: ${{ secrets.SIGNING_KEY }}
           alias: ${{ secrets.ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
