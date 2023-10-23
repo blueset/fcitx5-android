@@ -120,5 +120,5 @@ jobs:
       - name: Upload signed APKs
         uses: actions/upload-artifact@v3
         with:
-          name: plugins-${{ matrix.os }}-${{ matrix.abi }}-release
+          name: signed-${{ matrix.os }}-${{ matrix.abi }}
           path: signed-apks
