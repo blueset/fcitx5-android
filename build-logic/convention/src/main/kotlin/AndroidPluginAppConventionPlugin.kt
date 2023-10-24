@@ -14,10 +14,10 @@ class AndroidPluginAppConventionPlugin : Plugin<Project> {
         target.extensions.configure<BaseAppModuleExtension> {
             buildTypes {
                 release {
-                    buildConfigField("String", "MAIN_APPLICATION_ID", "\"org.fcitx.fcitx5.android\"")
+                    buildConfigField("String", "MAIN_APPLICATION_ID", "\"org.fcitx.fcitx5.android.colemak\"")
                     addManifestPlaceholders(
                         mapOf(
-                            "mainApplicationId" to "org.fcitx.fcitx5.android",
+                            "mainApplicationId" to "org.fcitx.fcitx5.android.colemak",
                         )
                     )
                 }
