@@ -2,5 +2,5 @@
 <resources>
     <string name="app_name_debug">Fcitx5 для Android (плагин Anthy | Отладка for Colemak fork)</string>
     <string name="app_name_release">Fcitx5 для Android (плагин Anthy for Colemak fork)</string>
-    <string name="description">Обёртка Anthy для Fcitx5</string>
+    <string name="description">Обёртка Anthy для Anthy (японский метод ввода) для Fcitx5</string>
 </resources>

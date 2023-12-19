@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.input
 
 import android.annotation.SuppressLint
@@ -20,6 +24,7 @@ import android.view.inputmethod.CursorAnchorInfo
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestionsRequest
 import android.view.inputmethod.InlineSuggestionsResponse
+import android.view.inputmethod.InputMethodSubtype
 import android.widget.FrameLayout
 import android.widget.inline.InlinePresentationSpec
 import androidx.annotation.Keep
@@ -44,6 +49,7 @@ import org.fcitx.fcitx5.android.core.FcitxEvent
 import org.fcitx.fcitx5.android.core.FormattedText
 import org.fcitx.fcitx5.android.core.KeyStates
 import org.fcitx.fcitx5.android.core.KeySym
+import org.fcitx.fcitx5.android.core.SubtypeManager
 import org.fcitx.fcitx5.android.daemon.FcitxConnection
 import org.fcitx.fcitx5.android.daemon.FcitxDaemon
 import org.fcitx.fcitx5.android.data.InputFeedbacks
@@ -53,7 +59,9 @@ import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.input.cursor.CursorRange
 import org.fcitx.fcitx5.android.input.cursor.CursorTracker
+import org.fcitx.fcitx5.android.utils.InputMethodUtil
 import org.fcitx.fcitx5.android.utils.alpha
+import org.fcitx.fcitx5.android.utils.inputMethodManager
 import org.fcitx.fcitx5.android.utils.withBatchEdit
 import splitties.bitflags.hasFlag
 import splitties.dimensions.dp
@@ -100,7 +108,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     @Keep
     private val recreateInputViewListener = ManagedPreference.OnChangeListener<Any> { _, _ ->
-        recreateInputView(ThemeManager.getActiveTheme())
+        recreateInputView(ThemeManager.activeTheme)
     }
 
     @Keep
@@ -149,6 +157,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             advanced.disableAnimation.registerOnChangeListener(recreateInputViewListener)
         }
         ThemeManager.addOnChangedListener(onThemeChangeListener)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            postFcitxJob {
+                SubtypeManager.syncWith(enabledIme())
+            }
+        }
         super.onCreate()
     }
 
@@ -198,6 +211,12 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             is FcitxEvent.DeleteSurroundingEvent -> {
                 val (before, after) = event.data
                 handleDeleteSurrounding(before, after)
+            }
+            is FcitxEvent.IMChangeEvent -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    val subtype = SubtypeManager.subtypeOf(event.data.uniqueName) ?: return
+                    switchInputMethod(InputMethodUtil.componentName, subtype)
+                }
             }
             else -> {}
         }
@@ -395,7 +414,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         // during each onConfigurationChanged period.
         // That is, onCreateInputView would be called again, after system dark mode changes,
         // or screen orientation changes.
-        return InputView(this, fcitx, ThemeManager.getActiveTheme()).also {
+        return InputView(this, fcitx, ThemeManager.activeTheme).also {
             inputView = it
         }
     }
@@ -481,6 +500,22 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         postFcitxJob {
             // ensure InputContext has been created before focusing it
             activate(uid, pkgName)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val subtype = inputMethodManager.currentInputMethodSubtype ?: return
+            val im = SubtypeManager.inputMethodOf(subtype)
+            postFcitxJob {
+                activateIme(im)
+            }
+        }
+    }
+
+    override fun onCurrentInputMethodSubtypeChanged(newSubtype: InputMethodSubtype) {
+        super.onCurrentInputMethodSubtypeChanged(newSubtype)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            postFcitxJob {
+                activateIme(SubtypeManager.inputMethodOf(newSubtype))
+            }
         }
     }
 
@@ -658,7 +693,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
         if (!inlineSuggestions) return null
-        val theme = ThemeManager.getActiveTheme()
+        val theme = ThemeManager.activeTheme
         val chipDrawable =
             if (theme.isDark) R.drawable.bkg_inline_suggestion_dark else R.drawable.bkg_inline_suggestion_light
         val chipBg = Icon.createWithResource(this, chipDrawable).setTint(theme.keyTextColor)
@@ -715,6 +750,15 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     override fun onInlineSuggestionsResponse(response: InlineSuggestionsResponse): Boolean {
         if (!inlineSuggestions) return false
         return inputView?.handleInlineSuggestions(response) ?: false
+    }
+
+    fun nextInputMethodApp() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            switchToNextInputMethod(false)
+        } else {
+            @Suppress("DEPRECATION")
+            inputMethodManager.switchToNextInputMethod(window.window!!.attributes.token, false)
+        }
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {

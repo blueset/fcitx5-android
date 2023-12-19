@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 #include <fcitx-utils/utf8.h>
 #include <fcitx-utils/charutils.h>
 #include <fcitx/instance.h>
@@ -265,15 +269,17 @@ void AndroidKeyboardEngine::updateCandidate(const InputMethodEntry &entry, Input
 }
 
 void AndroidKeyboardEngine::updateUI(InputContext *inputContext) {
-    auto [preedit, cursor] = preeditWithCursor(inputContext);
-    Text clientPreedit(preedit, TextFormatFlag::Underline);
-    clientPreedit.setCursor(static_cast<int>(cursor));
-    inputContext->inputPanel().setClientPreedit(clientPreedit);
-    // we don't want preedit here ...
-//    if (!inputContext->capabilityFlags().test(CapabilityFlag::Preedit)) {
-//        inputContext->inputPanel().setPreedit(preedit);
-//    }
-    inputContext->updatePreedit();
+    auto [text, cursor] = preeditWithCursor(inputContext);
+    if (inputContext->capabilityFlags().test(CapabilityFlag::Preedit)) {
+        Text clientPreedit(text, TextFormatFlag::Underline);
+        clientPreedit.setCursor(static_cast<int>(cursor));
+        inputContext->inputPanel().setClientPreedit(clientPreedit);
+        inputContext->updatePreedit();
+    } else {
+        Text preedit(text);
+        preedit.setCursor(static_cast<int>(cursor));
+        inputContext->inputPanel().setPreedit(preedit);
+    }
     inputContext->updateUserInterface(UserInterfaceComponent::InputPanel);
 }
 
@@ -316,8 +322,9 @@ void AndroidKeyboardEngine::commitBuffer(InputContext *inputContext) {
     if (preedit.empty()) {
         return;
     }
+    auto characterCount = utf8::length(preedit, 0, cursor);
     if (inputContext->capabilityFlags().test(CapabilityFlag::CommitStringWithCursor)) {
-        inputContext->commitStringWithCursor(preedit, cursor);
+        inputContext->commitStringWithCursor(preedit, characterCount);
     } else {
         inputContext->commitString(preedit);
     }

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 #ifndef _FCITX5_ANDROID_ANDROIDFRONTEND_H_
 #define _FCITX5_ANDROID_ANDROIDFRONTEND_H_
 
@@ -9,6 +13,8 @@
 #include "inputcontextcache.h"
 
 namespace fcitx {
+
+class AndroidInputContext;
 
 class AndroidFrontend : public AddonInstance {
 public:
@@ -71,18 +77,14 @@ private:
 
     Instance *instance_;
     FocusGroup focusGroup_;
-    InputContext *activeIC_;
+    AndroidInputContext *activeIC_;
     InputContextCache icCache_;
     std::vector<std::unique_ptr<HandlerTableEntry<EventHandler>>> eventHandlers_;
-    std::unique_ptr<EventSource> statusAreaDefer_;
-    bool statusAreaUpdated_;
-
-    void handleStatusAreaUpdate();
 
     CandidateListCallback candidateListCallback = [](const std::vector<std::string> &, const int) {};
     CommitStringCallback commitStringCallback = [](const std::string &, const int) {};
     ClientPreeditCallback preeditCallback = [](const Text &) {};
-    InputPanelCallback inputPanelAuxCallback = [](const fcitx::Text &, const fcitx::Text &, const Text &) {};
+    InputPanelCallback inputPanelCallback = [](const fcitx::Text &, const fcitx::Text &, const Text &) {};
     KeyEventCallback keyEventCallback = [](const int, const uint32_t, const uint32_t, const bool, const int) {};
     InputMethodChangeCallback imChangeCallback = [] {};
     StatusAreaUpdateCallback statusAreaUpdateCallback = [] {};

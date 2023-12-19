@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.main.settings.theme
 
 import android.annotation.SuppressLint
@@ -38,7 +42,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.parcelize.Parcelize
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.theme.Theme
-import org.fcitx.fcitx5.android.data.theme.ThemeManager
+import org.fcitx.fcitx5.android.data.theme.ThemeFilesManager
 import org.fcitx.fcitx5.android.data.theme.ThemePreset
 import org.fcitx.fcitx5.android.ui.common.withLoadingDialog
 import org.fcitx.fcitx5.android.utils.applyTranslucentSystemBars
@@ -99,7 +103,7 @@ class CustomThemeActivity : AppCompatActivity() {
             }
 
         override fun parseResult(resultCode: Int, intent: Intent?): BackgroundResult? =
-            intent?.extras?.parcelable(RESULT)
+            intent?.parcelable(RESULT)
     }
 
     private val toolbar by lazy {
@@ -259,7 +263,7 @@ class CustomThemeActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // recover from bundle
-        val originTheme = intent?.extras?.parcelable<Theme.Custom>(ORIGIN_THEME)?.also { t ->
+        val originTheme = intent?.parcelable<Theme.Custom>(ORIGIN_THEME)?.also { t ->
             theme = t
             whenHasBackground {
                 croppedImageFile = File(it.croppedFilePath)
@@ -272,7 +276,7 @@ class CustomThemeActivity : AppCompatActivity() {
         }
         // create new
         if (originTheme == null) {
-            val (n, c, s) = ThemeManager.newCustomBackgroundImages()
+            val (n, c, s) = ThemeFilesManager.newCustomBackgroundImages()
             backgroundStates.apply {
                 croppedImageFile = c
                 srcImageFile = s

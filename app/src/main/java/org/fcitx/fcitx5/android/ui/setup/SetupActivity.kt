@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.setup
 
 import android.app.NotificationChannel
@@ -55,7 +59,7 @@ class SetupActivity : FragmentActivity() {
         }
         nextButton = binding.nextButton.apply {
             setOnClickListener {
-                if (viewPager.currentItem != SetupPage.values().size - 1)
+                if (viewPager.currentItem != SetupPage.entries.size - 1)
                     viewPager.currentItem = viewPager.currentItem + 1
                 else finish()
             }
@@ -134,7 +138,7 @@ class SetupActivity : FragmentActivity() {
     }
 
     private inner class Adapter : FragmentStateAdapter(this) {
-        override fun getItemCount(): Int = SetupPage.values().size
+        override fun getItemCount(): Int = SetupPage.entries.size
 
         override fun createFragment(position: Int): Fragment =
             SetupFragment().apply {

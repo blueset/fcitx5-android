@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(fcitx5-android VERSION 0.0.7)
+project(fcitx5-android VERSION 0.0.8)
 
 # For reproducible build
 add_link_options("LINKER:--hash-style=gnu,--build-id=none")
@@ -51,7 +51,7 @@ add_library(pinyin-customphrase STATIC "${CHINESE_ADDONS_PINYIN_DIR}/customphras
 target_include_directories(pinyin-customphrase INTERFACE "${CHINESE_ADDONS_PINYIN_DIR}")
 target_link_libraries(pinyin-customphrase PRIVATE fmt::fmt-header-only Fcitx5::Utils LibIME::Core)
 
-add_library(native-lib SHARED native-lib.cpp)
+add_library(native-lib SHARED native-lib.cpp androidaddonloader/androidaddonloader.cpp)
 target_link_libraries(native-lib
         log
         libevent::core

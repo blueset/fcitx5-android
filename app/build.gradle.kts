@@ -114,6 +114,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.room.paging)
+    implementation(libs.androidx.startup)
     implementation(libs.androidx.viewpager2)
     implementation(libs.material)
     implementation(libs.arrow)
@@ -138,9 +139,12 @@ dependencies {
     androidTestImplementation(libs.junit)
 }
 
-// remove Baseline Profile Installer or whatever it is...
 configurations {
     all {
+        // remove Baseline Profile Installer or whatever it is...
         exclude(group = "androidx.profileinstaller", module = "profileinstaller")
+        // remove unwanted splitties libraries...
+        exclude(group = "com.louiscad.splitties", module = "splitties-appctx")
+        exclude(group = "com.louiscad.splitties", module = "splitties-systemservices")
     }
 }

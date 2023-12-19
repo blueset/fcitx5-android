@@ -20,11 +20,15 @@ GitHub: [![release version](https://img.shields.io/github/v/release/fcitx5-andro
 ### Supported Languages
 
 - English (with spell check)
-- Chinese (Pinyin, Shuangpin, Wubi, Cangjie and custom tables)
+- Chinese
+  - Pinyin, Shuangpin, Wubi, Cangjie and custom tables (built-in, powered by [fcitx5-chinese-addons](https://github.com/fcitx/fcitx5-chinese-addons))
+  - Zhuyin/Bopomofo (via [Chewing Plugin](./plugin/chewing))
+  - Jyutping (via [Jyutping Plugin](./plugin/jyutping/), powered by [libime-jyutping](https://github.com/fcitx/libime-jyutping))
 - Vietnamese (via [UniKey Plugin](./plugin/unikey), supports Telex, VNI and VIQR)
 - Japanese (via [Anthy Plugin](./plugin/anthy))
 - Korean (via [Hangul Plugin](./plugin/hangul))
-- Generic (via [RIME Plugin](./plugin/rime))
+- Sinhala (via [Sayura Plugin](./plugin/sayura))
+- Generic (via [RIME Plugin](./plugin/rime), supports importing custom schemas)
 
 ### Implemented Features
 
@@ -46,7 +50,7 @@ GitHub: [![release version](https://img.shields.io/github/v/release/fcitx5-andro
 
 |拼音, Material Light theme, key border enabled|自然码双拼, Pixel Dark theme, key border disabled|
 |:-:|:-:|
-|<img src="https://user-images.githubusercontent.com/13914967/202180575-04b6db41-ff24-4bef-899a-8051fc0243f5.png" width="360px">|<img src="https://user-images.githubusercontent.com/13914967/202180709-457e4897-961f-48a6-8fb2-b6560568a122.png" width="360px">|
+|<img src="https://github.com/fcitx5-android/fcitx5-android/assets/13914967/bd429247-62d9-4c78-bab8-70ef3ce47588" width="360px">|<img src="https://github.com/fcitx5-android/fcitx5-android/assets/13914967/3ae969c1-7ed0-4f92-a5df-19dc8c90a8c3" width="360px">|
 
 |Emoji picker, Pixel Light theme, key border enabled|Symbol picker, Material Dark theme, key border disabled|
 |:-:|:-:|
@@ -95,7 +99,7 @@ git submodule update --init --recursive
 <summary>On Windows, you may need to regenerate symlinks to submodules.</summary>
 
 ```powershell
-Remove-Item -Recurse app/src/main/assets/usr/share, plugin/hangul/src/main/assets/usr/share/libhangul
+Remove-Item -Recurse app/src/main/assets/usr/share, plugin/hangul/src/main/assets/usr/share/libhangul, plugin/chewing/src/main/assets/usr/share/libchewing, plugin/jyutping/src/main/assets/usr/share/libime
 git checkout -- .
 ```
 

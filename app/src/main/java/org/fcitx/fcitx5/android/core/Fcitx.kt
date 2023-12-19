@@ -1,6 +1,11 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.core
 
 import android.content.Context
+import android.os.Build
 import androidx.annotation.Keep
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.BufferOverflow
@@ -203,7 +208,9 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
             appLib: String,
             extData: String,
             extCache: String,
-            extDomains: Array<String>
+            extDomains: Array<String>,
+            libraryNames: Array<String>,
+            libraryDependencies: Array<Array<String>>
         )
 
         @JvmStatic
@@ -353,13 +360,10 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
             getFcitxGlobalConfig()?.get("cfg")?.apply {
                 get("Behavior").apply {
                     get("ShareInputState").value = "All"
-                    get("PreeditEnabledByDefault").value = "False"
                 }
                 setFcitxGlobalConfig(this)
             }
             getFcitxAddonConfig("pinyin")?.get("cfg")?.apply {
-                get("PreeditInApplication").value = "False"
-                get("PreeditCursorPositionAtBeginning").value = "False"
                 get("QuickPhraseKey").value = ""
                 setFcitxAddonConfig("pinyin", this)
             }
@@ -386,14 +390,21 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
             val locale = Locales.fcitxLocale
             val dataDir = DataManager.dataDir.absolutePath
             val plugins = DataManager.getLoadedPlugins()
-            val nativeLibDir = buildString {
-                append(context.applicationInfo.nativeLibraryDir)
-                plugins.forEach {
-                    append(':')
-                    append(it.nativeLibraryDir)
+            val nativeLibDir = StringBuilder(context.applicationInfo.nativeLibraryDir)
+            val extDomains = arrayListOf<String>()
+            val libraryNames = arrayListOf<String>()
+            val libraryDependency = arrayListOf<Array<String>>()
+            plugins.forEach {
+                nativeLibDir.append(':')
+                nativeLibDir.append(it.nativeLibraryDir)
+                it.domain?.let { d ->
+                    extDomains.add(d)
+                }
+                it.libraryDependency.forEach { (lib, dep) ->
+                    libraryNames.add(lib)
+                    libraryDependency.add(dep.toTypedArray())
                 }
             }
-            val extDomains = plugins.mapNotNull { it.domain }.toTypedArray()
             Timber.d(
                 """
                Starting fcitx with:
@@ -407,11 +418,18 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
                 startupFcitx(
                     locale,
                     dataDir,
-                    nativeLibDir,
+                    nativeLibDir.toString(),
                     (getExternalFilesDir(null) ?: filesDir).absolutePath,
                     (externalCacheDir ?: cacheDir).absolutePath,
-                    extDomains
+                    extDomains.toTypedArray(),
+                    libraryNames.toTypedArray(),
+                    libraryDependency.toTypedArray()
                 )
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                lifecycle.launchWhenReady {
+                    SubtypeManager.syncWith(enabledIme())
+                }
             }
         }
 

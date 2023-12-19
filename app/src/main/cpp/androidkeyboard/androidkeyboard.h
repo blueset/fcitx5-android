@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 #ifndef _FCITX5_ANDROID_ANDROIDKEYBOARD_H_
 #define _FCITX5_ANDROID_ANDROIDKEYBOARD_H_
 
@@ -103,6 +107,9 @@ public:
 
 private:
     bool supportHint(const std::string &language);
+    /**
+     * preedit string and byte cursor
+     */
     std::pair<std::string, size_t> preeditWithCursor(InputContext *inputContext);
 
     Instance *instance_;

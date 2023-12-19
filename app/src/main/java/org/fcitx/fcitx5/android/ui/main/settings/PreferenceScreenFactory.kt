@@ -1,6 +1,11 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ */
 package org.fcitx.fcitx5.android.ui.main.settings
 
 import android.content.Context
+import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.core.os.bundleOf
 import androidx.fragment.app.FragmentManager
@@ -23,6 +28,8 @@ import org.fcitx.fcitx5.android.ui.main.modified.MySwitchPreference
 import org.fcitx.fcitx5.android.ui.main.settings.addon.AddonConfigFragment
 import org.fcitx.fcitx5.android.ui.main.settings.global.GlobalConfigFragment
 import org.fcitx.fcitx5.android.ui.main.settings.im.InputMethodConfigFragment
+import org.fcitx.fcitx5.android.utils.buildDocumentsProviderIntent
+import org.fcitx.fcitx5.android.utils.buildPrimaryStorageIntent
 import org.fcitx.fcitx5.android.utils.config.ConfigDescriptor
 import org.fcitx.fcitx5.android.utils.config.ConfigDescriptor.ConfigBool
 import org.fcitx.fcitx5.android.utils.config.ConfigDescriptor.ConfigCustom
@@ -35,6 +42,7 @@ import org.fcitx.fcitx5.android.utils.config.ConfigDescriptor.ConfigList
 import org.fcitx.fcitx5.android.utils.config.ConfigDescriptor.ConfigString
 import org.fcitx.fcitx5.android.utils.config.ConfigType
 import org.fcitx.fcitx5.android.utils.parcelableArray
+import org.fcitx.fcitx5.android.utils.toast
 
 object PreferenceScreenFactory {
 
@@ -156,6 +164,25 @@ object PreferenceScreenFactory {
             }
         }
 
+        fun rimeUserDataDir() = Preference(context).apply {
+            setOnPreferenceClickListener {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    try {
+                        context.startActivity(buildPrimaryStorageIntent("data/rime"))
+                        return@setOnPreferenceClickListener true
+                    } catch (e: Exception) {
+                        context.toast(e.localizedMessage ?: e.stackTraceToString())
+                    }
+                }
+                try {
+                    context.startActivity(buildDocumentsProviderIntent())
+                } catch (e: Exception) {
+                    context.toast(e.localizedMessage ?: e.stackTraceToString())
+                }
+                true
+            }
+        }
+
         fun listPreference(subtype: ConfigType<*>): Preference = object : Preference(context) {
             override fun onClick() {
                 val currentFragment = fragmentManager.findFragmentById(R.id.nav_host_fragment)!!
@@ -236,6 +263,7 @@ object PreferenceScreenFactory {
                 ConfigExternal.ETy.TableGlobal -> addonConfigPreference("table")
                 ConfigExternal.ETy.AndroidTable -> tableInputMethod()
                 ConfigExternal.ETy.PinyinCustomPhrase -> pinyinCustomPhrase()
+                ConfigExternal.ETy.RimeUserDataDir -> rimeUserDataDir()
                 else -> stubPreference()
             }
             is ConfigInt -> {
