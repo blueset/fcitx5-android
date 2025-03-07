@@ -107,6 +107,7 @@ jobs:
           signingKey: ${{ secrets.SIGNING_KEY }}
           keyAlias: ${{ secrets.ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ""
           # output: signed-apks/
       - name: Upload plugins
         uses: actions/upload-artifact@v4
