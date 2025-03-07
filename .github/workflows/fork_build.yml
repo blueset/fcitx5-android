@@ -99,15 +99,15 @@ jobs:
               cp "plugins-to-upload-release/${i}-release/"*.apk "apk-to-sign"
             fi
           done
-      - uses: Tlaster/android-sign@v1.2.2
+      - uses: NoCrypt/sign-android@main
         name: Sign APKs
         id: sign_apks
         with:
-          releaseDirectory: apk-to-sign
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.ALIAS }}
+          releaseDir: apk-to-sign
+          signingKey: ${{ secrets.SIGNING_KEY }}
+          keyAlias: ${{ secrets.ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          output: signed-apks/
+          # output: signed-apks/
       - name: Upload plugins
         uses: actions/upload-artifact@v4
         with:
@@ -122,4 +122,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: signed-${{ matrix.os }}-${{ matrix.abi }}
-          path: signed-apks
+          path: ${{ steps.sign_apks.outputs.signedFile }}
