@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2025 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.input.picker
 
@@ -11,8 +11,15 @@ import androidx.core.view.updateLayoutParams
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.utils.alpha
 import splitties.views.backgroundColor
-import splitties.views.dsl.constraintlayout.*
-import splitties.views.dsl.core.*
+import splitties.views.dsl.constraintlayout.centerVertically
+import splitties.views.dsl.constraintlayout.constraintLayout
+import splitties.views.dsl.constraintlayout.lParams
+import splitties.views.dsl.constraintlayout.matchConstraints
+import splitties.views.dsl.constraintlayout.startOfParent
+import splitties.views.dsl.core.Ui
+import splitties.views.dsl.core.add
+import splitties.views.dsl.core.matchParent
+import splitties.views.dsl.core.view
 import kotlin.math.roundToInt
 
 class PickerPaginationUi(override val ctx: Context, val theme: Theme) : Ui {
@@ -51,8 +58,11 @@ class PickerPaginationUi(override val ctx: Context, val theme: Theme) : Ui {
     }
 
     fun updateScrollProgress(current: Int, progress: Float) {
+        if (pageCount <= 1) {
+            return
+        }
         highlight.updateLayoutParams<ConstraintLayout.LayoutParams> {
-            startMargin = ((current + progress) * highlight.width).roundToInt()
+            marginStart = ((current + progress) * highlight.width).roundToInt()
         }
     }
 }

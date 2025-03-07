@@ -13,6 +13,7 @@ import android.text.TextUtils
 import android.view.View
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.theme.Theme
+import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView
 import splitties.dimensions.dp
 import splitties.resources.drawable
 import splitties.views.dsl.constraintlayout.bottomOfParent
@@ -23,13 +24,14 @@ import splitties.views.dsl.constraintlayout.lParams
 import splitties.views.dsl.core.Ui
 import splitties.views.dsl.core.add
 import splitties.views.dsl.core.imageView
+import splitties.views.dsl.core.lParams
 import splitties.views.dsl.core.matchParent
 import splitties.views.dsl.core.textView
 import splitties.views.dsl.core.wrapContent
 import splitties.views.imageDrawable
 import splitties.views.setPaddingDp
 
-class ClipboardEntryUi(override val ctx: Context, private val theme: Theme) : Ui {
+class ClipboardEntryUi(override val ctx: Context, private val theme: Theme, radius: Float) : Ui {
 
     val textView = textView {
         minLines = 1
@@ -47,10 +49,19 @@ class ClipboardEntryUi(override val ctx: Context, private val theme: Theme) : Ui
         }
     }
 
-    override val root = constraintLayout {
+    val layout = constraintLayout {
+        add(textView, lParams(matchParent, wrapContent) {
+            centerVertically()
+        })
+        add(pin, lParams(dp(12), dp(12)) {
+            bottomOfParent(dp(2))
+            endOfParent(dp(2))
+        })
+    }
+
+    override val root = CustomGestureView(ctx).apply {
         isClickable = true
         minimumHeight = dp(30)
-        val radius = dp(2f)
         foreground = RippleDrawable(
             ColorStateList.valueOf(theme.keyPressHighlightColor), null,
             GradientDrawable().apply {
@@ -62,13 +73,7 @@ class ClipboardEntryUi(override val ctx: Context, private val theme: Theme) : Ui
             cornerRadius = radius
             setColor(theme.clipboardEntryColor)
         }
-        add(textView, lParams(matchParent, wrapContent) {
-            centerVertically()
-        })
-        add(pin, lParams(dp(12), dp(12)) {
-            bottomOfParent(dp(2))
-            endOfParent(dp(2))
-        })
+        add(layout, lParams(matchParent, matchParent))
     }
 
     fun setEntry(text: String, pinned: Boolean) {

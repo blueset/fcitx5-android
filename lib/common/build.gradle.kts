@@ -1,19 +1,12 @@
 plugins {
     id("org.fcitx.fcitx5.android.lib-convention")
     `maven-publish`
-    id("com.palantir.git-version") version "3.0.0"
+    alias(libs.plugins.gitVersion)
 }
 
 android {
     namespace = "org.fcitx.fcitx5.android.lib.common"
 
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-        }
-    }
-
-    @Suppress("UnstableApiUsage")
     buildFeatures {
         aidl = true
     }

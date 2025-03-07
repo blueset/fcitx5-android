@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2025 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.input.status
 
@@ -14,9 +14,9 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.Action
+import org.fcitx.fcitx5.android.core.SubtypeManager
 import org.fcitx.fcitx5.android.daemon.FcitxConnection
 import org.fcitx.fcitx5.android.daemon.launchOnReady
-import org.fcitx.fcitx5.android.core.SubtypeManager
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.input.FcitxInputMethodService
@@ -73,7 +73,7 @@ class StatusAreaWindow : InputWindow.ExtendedInputWindow<StatusAreaWindow>(),
                 ReloadConfig
             ),
             StatusAreaEntry.Android(
-                context.getString(R.string.keyboard),
+                context.getString(R.string.virtual_keyboard),
                 R.drawable.ic_baseline_keyboard_24,
                 Keyboard
             )
@@ -101,7 +101,7 @@ class StatusAreaWindow : InputWindow.ExtendedInputWindow<StatusAreaWindow>(),
                         val popup = PopupMenu(context, view)
                         val menu = popup.menu
                         val hasDivider =
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && !DeviceUtil.isHMOS) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && !DeviceUtil.isHMOS && !DeviceUtil.isHonorMagicOS) {
                                 menu.setGroupDividerEnabled(true)
                                 true
                             } else {
@@ -183,12 +183,14 @@ class StatusAreaWindow : InputWindow.ExtendedInputWindow<StatusAreaWindow>(),
 
     private val editorInfoButton by lazy {
         ToolButton(context, R.drawable.ic_baseline_info_24, theme).apply {
+            contentDescription = context.getString(R.string.editor_info_inspector)
             setOnClickListener { windowManager.attachWindow(EditorInfoWindow()) }
         }
     }
 
     private val settingsButton by lazy {
         ToolButton(context, R.drawable.ic_baseline_settings_24, theme).apply {
+            contentDescription = context.getString(R.string.open_input_method_settings)
             setOnClickListener { AppUtil.launchMain(context) }
         }
     }

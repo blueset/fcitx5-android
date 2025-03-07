@@ -11,7 +11,6 @@ import org.gradle.api.Project
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
-import org.gradle.configurationcache.extensions.capitalized
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.task
 
@@ -38,7 +37,12 @@ class BuildMetadataPlugin : Plugin<Project> {
                         // create metadata file after package, because it's outputDirectory would
                         // be cleared at some time before package
                         mustRunAfter(packageTask)
-                        outputFile.set(packageTask.outputDirectory.file("build-metadata.json"))
+                        val fileName = target.path.let {
+                            // ":app" -> "" || ":plugin:anthy" -> ".plugin.anthy"
+                            val suffix = if (it == ":app") "" else it.replace(':', '.')
+                            "build-metadata${suffix}.json"
+                        }
+                        outputFile.set(packageTask.outputDirectory.file(fileName))
                     }.also {
                         assembleProvider.get().dependsOn(it) // assemble${Variant} task
                     }

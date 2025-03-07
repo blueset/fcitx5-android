@@ -77,10 +77,10 @@ public:
 
 class JEnv {
 private:
-    JNIEnv *env;
+    JNIEnv *env = nullptr;
 
 public:
-    JEnv(JavaVM *jvm) {
+    explicit JEnv(JavaVM *jvm) {
         if (jvm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) == JNI_EDETACHED) {
             jvm->AttachCurrentThread(&env, nullptr);
         }
@@ -138,7 +138,13 @@ public:
     jfieldID PinyinCustomPhraseOrder;
     jfieldID PinyinCustomPhraseValue;
 
-    GlobalRefSingleton(JavaVM *jvm_) : jvm(jvm_) {
+    jclass CandidateAction;
+    jmethodID CandidateActionInit;
+
+    jclass Candidate;
+    jmethodID CandidateInit;
+
+    explicit GlobalRefSingleton(JavaVM *jvm_) : jvm(jvm_) {
         JNIEnv *env;
         jvm->AttachCurrentThread(&env, nullptr);
 
@@ -157,8 +163,8 @@ public:
         HandleFcitxEvent = env->GetStaticMethodID(Fcitx, "handleFcitxEvent", "(I[Ljava/lang/Object;)V");
 
         InputMethodEntry = reinterpret_cast<jclass>(env->NewGlobalRef(env->FindClass("org/fcitx/fcitx5/android/core/InputMethodEntry")));
-        InputMethodEntryInit = env->GetMethodID(InputMethodEntry, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V");
-        InputMethodEntryInitWithSubMode = env->GetMethodID(InputMethodEntry, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+        InputMethodEntryInit = env->GetMethodID(InputMethodEntry, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V");
+        InputMethodEntryInitWithSubMode = env->GetMethodID(InputMethodEntry, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
 
         RawConfig = reinterpret_cast<jclass>(env->NewGlobalRef(env->FindClass("org/fcitx/fcitx5/android/core/RawConfig")));
         RawConfigName = env->GetFieldID(RawConfig, "name", "Ljava/lang/String;");
@@ -184,9 +190,15 @@ public:
         PinyinCustomPhraseKey = env->GetFieldID(PinyinCustomPhrase, "key", "Ljava/lang/String;");
         PinyinCustomPhraseOrder = env->GetFieldID(PinyinCustomPhrase, "order", "I");
         PinyinCustomPhraseValue = env->GetFieldID(PinyinCustomPhrase, "value", "Ljava/lang/String;");
+
+        CandidateAction = reinterpret_cast<jclass>(env->NewGlobalRef(env->FindClass("org/fcitx/fcitx5/android/core/CandidateAction")));
+        CandidateActionInit = env->GetMethodID(CandidateAction, "<init>", "(ILjava/lang/String;ZLjava/lang/String;ZZ)V");
+
+        Candidate = reinterpret_cast<jclass>(env->NewGlobalRef(env->FindClass("org/fcitx/fcitx5/android/core/FcitxEvent$Candidate")));
+        CandidateInit = env->GetMethodID(Candidate, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
     }
 
-    const JEnv AttachEnv() const { return JEnv(jvm); }
+    [[nodiscard]] JEnv AttachEnv() const { return JEnv(jvm); }
 };
 
 extern GlobalRefSingleton *GlobalRef;

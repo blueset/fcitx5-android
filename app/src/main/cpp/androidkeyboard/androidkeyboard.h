@@ -2,8 +2,8 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
  */
-#ifndef _FCITX5_ANDROID_ANDROIDKEYBOARD_H_
-#define _FCITX5_ANDROID_ANDROIDKEYBOARD_H_
+#ifndef FCITX5_ANDROID_ANDROIDKEYBOARD_H
+#define FCITX5_ANDROID_ANDROIDKEYBOARD_H
 
 #include <fcitx-config/iniparser.h>
 #include <fcitx-utils/inputbuffer.h>
@@ -30,6 +30,10 @@ FCITX_CONFIGURATION(
         AndroidKeyboardEngineConfig,
         Option<bool>
             enableWordHint{this, "EnableWordHint", _("Enable word hint"), true};
+        Option<bool>
+            hintOnPhysicalKeyboard{this, "WordHintOnPhysicalKeyboard", _("Enable word hint when using physical keyboard"), false};
+        Option<bool>
+            editorControlledWordHint{this, "EditorControlledWordHint", _("Disable word hint based on editor attributes"), true};
         Option<int, IntConstrain>
             pageSize{this, "PageSize", _("Word hint page size"), 5, IntConstrain(3, 10)};
         OptionWithAnnotation<ChooseModifier, ChooseModifierI18NAnnotation>
@@ -57,8 +61,7 @@ public:
     static int constexpr MaxBufferSize = 20;
     static int constexpr SpellCandidateSize = 20;
 
-    AndroidKeyboardEngine(Instance *instance);
-    ~AndroidKeyboardEngine() = default;
+    explicit AndroidKeyboardEngine(Instance *instance);
 
     Instance *instance() { return instance_; }
 
@@ -94,10 +97,10 @@ public:
 
     auto factory() { return &factory_; }
 
-    // Return true if chr is pushed to buffer.
-    // Return false if chr will be skipped by buffer, usually this means caller
-    // need to call commit buffer and forward chr manually.
-    bool updateBuffer(InputContext *inputContext, const std::string &chr);
+    // Return true if event is pushed to buffer.
+    // Return false if event will be skipped by buffer, usually this means caller
+    // need to call commit buffer and forward event manually.
+    bool updateBuffer(InputContext *inputContext, const KeyEvent& event);
 
     // Commit current buffer, also reset the state.
     // See also preeditString().
@@ -131,4 +134,4 @@ public:
 
 }
 
-#endif //_FCITX5_ANDROID_ANDROIDKEYBOARD_H_
+#endif //FCITX5_ANDROID_ANDROIDKEYBOARD_H

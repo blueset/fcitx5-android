@@ -14,6 +14,8 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Process
 import android.util.Log
+import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.preference.PreferenceManager
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.MainScope
@@ -26,6 +28,7 @@ import org.fcitx.fcitx5.android.ui.main.LogActivity
 import org.fcitx.fcitx5.android.utils.AppUtil
 import org.fcitx.fcitx5.android.utils.Locales
 import org.fcitx.fcitx5.android.utils.isDarkMode
+import org.fcitx.fcitx5.android.utils.startActivity
 import org.fcitx.fcitx5.android.utils.userManager
 import timber.log.Timber
 import kotlin.system.exitProcess
@@ -57,6 +60,18 @@ class FcitxApplication : Application() {
         }
     }
 
+    private val restartFcitxInstanceReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != ACTION_RESTART_FCITX_INSTANCE) return
+            if (FcitxDaemon.getFirstConnectionOrNull() != null) {
+                Timber.i("Received broadcast '${intent.action}', try to restart fcitx instance ...")
+                FcitxDaemon.restartFcitx()
+            } else {
+                Timber.i("Received broadcast '${intent.action}', but there's no fcitx instance")
+            }
+        }
+    }
+
     var isDirectBootMode = false
         private set
 
@@ -74,7 +89,19 @@ class FcitxApplication : Application() {
 
         if (!BuildConfig.DEBUG) {
             Thread.setDefaultUncaughtExceptionHandler { _, e ->
-                startActivity(Intent(ctx, LogActivity::class.java).apply {
+                val crashTime = System.currentTimeMillis()
+                val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(ctx)
+                val lastCrashTimePrefKey = "last_crash_time"
+                val lastCrashTime = sharedPreferences.getLong(lastCrashTimePrefKey, -1L)
+                // make sure it was written to persistent storage
+                sharedPreferences.edit(commit = true) {
+                    putLong(lastCrashTimePrefKey, crashTime)
+                }
+                if (crashTime - lastCrashTime <= 10_000L) {
+                    // continuous crashes within 10 seconds, maybe in a crash loop. just bail
+                    exitProcess(10)
+                }
+                startActivity<LogActivity> {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                     putExtra(LogActivity.FROM_CRASH, true)
                     // avoid transaction overflow
@@ -85,7 +112,7 @@ class FcitxApplication : Application() {
                             it
                     }
                     putExtra(LogActivity.CRASH_STACK_TRACE, truncated)
-                })
+                }
                 exitProcess(10)
             }
         }
@@ -126,6 +153,14 @@ class FcitxApplication : Application() {
             AppPrefs.getInstance().syncToDeviceEncryptedStorage()
             ThemeManager.syncToDeviceEncryptedStorage()
         }
+        ContextCompat.registerReceiver(
+            this,
+            restartFcitxInstanceReceiver,
+            IntentFilter(ACTION_RESTART_FCITX_INSTANCE),
+            PERMISSION_TEST_INPUT_METHOD,
+            null,
+            ContextCompat.RECEIVER_EXPORTED
+        )
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -142,5 +177,21 @@ class FcitxApplication : Application() {
 
         fun getLastPid() = lastPid
         private const val MAX_STACKTRACE_SIZE = 128000
+
+        const val ACTION_RESTART_FCITX_INSTANCE =
+            "${BuildConfig.APPLICATION_ID}.action.RESTART_FCITX_INSTANCE"
+
+        /**
+         * This permission is requested by com.android.shell, makes it possible to restart
+         * fcitx instance from `adb shell am` command:
+         * ```sh
+         * adb shell am broadcast -a org.fcitx.fcitx5.android.action.RESTART_FCITX_INSTANCE
+         * ```
+         * https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-7.0.0_r1/packages/Shell/AndroidManifest.xml#67
+         *
+         * other candidate: android.permission.TEST_INPUT_METHOD requires Android 14
+         * https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-14.0.0_r1/packages/Shell/AndroidManifest.xml#628
+         */
+        const val PERMISSION_TEST_INPUT_METHOD = "android.permission.READ_INPUT_STATE"
     }
 }

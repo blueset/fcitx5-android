@@ -4,6 +4,7 @@
  */
 package org.fcitx.fcitx5.android.ui.main.settings
 
+import android.app.AlertDialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.net.Uri
@@ -14,7 +15,6 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.app.NotificationCompat
 import androidx.core.os.bundleOf
@@ -36,9 +36,11 @@ import org.fcitx.fcitx5.android.ui.common.BaseDynamicListUi
 import org.fcitx.fcitx5.android.ui.common.OnItemChangedListener
 import org.fcitx.fcitx5.android.ui.main.MainViewModel
 import org.fcitx.fcitx5.android.utils.NaiveDustman
-import org.fcitx.fcitx5.android.utils.errorDialog
+import org.fcitx.fcitx5.android.utils.importErrorDialog
+import org.fcitx.fcitx5.android.utils.item
 import org.fcitx.fcitx5.android.utils.materialTextInput
 import org.fcitx.fcitx5.android.utils.notificationManager
+import org.fcitx.fcitx5.android.utils.onPositiveButtonClick
 import org.fcitx.fcitx5.android.utils.queryFileName
 import org.fcitx.fcitx5.android.utils.str
 import splitties.resources.drawable
@@ -101,16 +103,12 @@ class QuickPhraseListFragment : Fragment(), OnItemChangedListener<QuickPhrase> {
                             icon = R.drawable.ic_baseline_expand_more_24
                             setOnClickListener {
                                 PopupMenu(requireContext(), this).apply {
-                                    menu.add(getString(R.string.edit)).setOnMenuItemClickListener {
-                                        edit()
-                                        true
-                                    }
-                                    menu.add(getString(R.string.reset)).setOnMenuItemClickListener {
+                                    menu.item(R.string.edit) { edit() }
+                                    menu.item(R.string.reset) {
                                         entry.deleteOverride()
                                         ui.updateItem(ui.indexItem(entry), entry)
                                         // not sure if the content changes
                                         dustman.forceDirty()
-                                        true
                                     }
                                     show()
                                 }
@@ -174,25 +172,25 @@ class QuickPhraseListFragment : Fragment(), OnItemChangedListener<QuickPhrase> {
                     setPaddingDp(20, 10, 20, 0)
                     add(inputLayout, lParams(matchParent))
                 }
-                val dialog = AlertDialog.Builder(requireContext())
+                AlertDialog.Builder(requireContext())
                     .setTitle(R.string.create_new)
                     .setView(layout)
                     .setPositiveButton(android.R.string.ok, null)
                     .setNegativeButton(android.R.string.cancel, null)
                     .show()
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener onClick@{
-                    val name = editText.str.trim()
-                    if (name.isBlank()) {
-                        editText.error =
-                            getString(R.string._cannot_be_empty, getString(R.string.name))
-                        editText.requestFocus()
-                        return@onClick
-                    } else {
-                        editText.error = null
+                    .onPositiveButtonClick onClick@{
+                        val name = editText.str.trim()
+                        if (name.isBlank()) {
+                            editText.error =
+                                getString(R.string._cannot_be_empty, getString(R.string.name))
+                            editText.requestFocus()
+                            return@onClick false
+                        } else {
+                            editText.error = null
+                        }
+                        ui.addItem(item = QuickPhraseManager.newEmpty(name))
+                        return@onClick true
                     }
-                    ui.addItem(item = QuickPhraseManager.newEmpty(name))
-                    dialog.dismiss()
-                }
             }
 
             override fun updateFAB() {
@@ -213,7 +211,7 @@ class QuickPhraseListFragment : Fragment(), OnItemChangedListener<QuickPhrase> {
                 getText(R.string.quickphrase_editor),
                 NotificationManager.IMPORTANCE_HIGH
             ).apply { description = CHANNEL_ID }
-            notificationManager.createNotificationChannel(channel)
+            requireContext().notificationManager.createNotificationChannel(channel)
         }
     }
 
@@ -233,12 +231,12 @@ class QuickPhraseListFragment : Fragment(), OnItemChangedListener<QuickPhrase> {
             val fileName = cr.queryFileName(uri) ?: return@launch
             val extName = fileName.substringAfterLast('.')
             if (extName != QuickPhrase.EXT) {
-                importErrorDialog(getString(R.string.exception_quickphrase_filename, fileName))
+                ctx.importErrorDialog(R.string.exception_quickphrase_filename, fileName)
                 return@launch
             }
             val entryName = fileName.substringBeforeLast('.')
             if (ui.entries.any { it.name == entryName }) {
-                importErrorDialog(getString(R.string.quickphrase_already_exists))
+                ctx.importErrorDialog(R.string.quickphrase_already_exists)
                 return@launch
             }
             NotificationCompat.Builder(ctx, CHANNEL_ID)
@@ -257,14 +255,10 @@ class QuickPhraseListFragment : Fragment(), OnItemChangedListener<QuickPhrase> {
                     ui.addItem(item = imported)
                 }
             } catch (e: Exception) {
-                importErrorDialog(e.localizedMessage ?: e.stackTraceToString())
+                ctx.importErrorDialog(e)
             }
             nm.cancel(id)
         }
-    }
-
-    private suspend fun importErrorDialog(message: String) {
-        errorDialog(requireContext(), getString(R.string.import_error), message)
     }
 
     private fun reloadQuickPhrase() {
@@ -272,7 +266,7 @@ class QuickPhraseListFragment : Fragment(), OnItemChangedListener<QuickPhrase> {
         resetDustman()
         // save the reference to NotificationManager, in case we need to cancel notification
         // after Fragment detached
-        val nm = notificationManager
+        val nm = requireContext().notificationManager
         lifecycleScope.launch(NonCancellable + Dispatchers.IO) {
             if (busy.compareAndSet(false, true)) {
                 val id = RELOAD_ID++

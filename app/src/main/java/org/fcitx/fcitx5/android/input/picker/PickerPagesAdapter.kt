@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2025 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.input.picker
 
@@ -16,8 +16,9 @@ class PickerPagesAdapter(
     private val keyActionListener: KeyActionListener,
     private val popupActionListener: PopupActionListener,
     data: List<Pair<PickerData.Category, Array<String>>>,
-    val density: PickerPageUi.Density,
-    recentlyUsedFileName: String
+    private val density: PickerPageUi.Density,
+    recentlyUsedFileName: String,
+    private val bordered: Boolean = false
 ) : RecyclerView.Adapter<PickerPagesAdapter.ViewHolder>() {
 
     class ViewHolder(val ui: PickerPageUi) : RecyclerView.ViewHolder(ui.root)
@@ -41,6 +42,7 @@ class PickerPagesAdapter(
      */
     private val recentlyUsed = RecentlyUsed(recentlyUsedFileName, density.pageSize)
 
+    @Suppress("JoinDeclarationAndAssignment")
     val categories: List<PickerData.Category>
 
     init {
@@ -110,7 +112,7 @@ class PickerPagesAdapter(
     override fun getItemCount() = pages.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        return ViewHolder(PickerPageUi(parent.context, theme, density))
+        return ViewHolder(PickerPageUi(parent.context, theme, density, bordered))
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {

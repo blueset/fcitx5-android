@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2025 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.input.bar
 
@@ -30,21 +30,27 @@ import org.fcitx.fcitx5.android.core.CapabilityFlag
 import org.fcitx.fcitx5.android.core.CapabilityFlags
 import org.fcitx.fcitx5.android.core.FcitxEvent.CandidateListEvent
 import org.fcitx.fcitx5.android.data.clipboard.ClipboardManager
+import org.fcitx.fcitx5.android.data.clipboard.db.ClipboardEntry
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
-import org.fcitx.fcitx5.android.input.bar.ExpandButtonStateMachine.State.*
+import org.fcitx.fcitx5.android.input.bar.ExpandButtonStateMachine.State.ClickToAttachWindow
+import org.fcitx.fcitx5.android.input.bar.ExpandButtonStateMachine.State.ClickToDetachWindow
+import org.fcitx.fcitx5.android.input.bar.ExpandButtonStateMachine.State.Hidden
 import org.fcitx.fcitx5.android.input.bar.KawaiiBarStateMachine.BooleanKey.CandidateEmpty
 import org.fcitx.fcitx5.android.input.bar.KawaiiBarStateMachine.BooleanKey.PreeditEmpty
-import org.fcitx.fcitx5.android.input.bar.KawaiiBarStateMachine.TransitionEvent.*
+import org.fcitx.fcitx5.android.input.bar.KawaiiBarStateMachine.TransitionEvent.CandidatesUpdated
+import org.fcitx.fcitx5.android.input.bar.KawaiiBarStateMachine.TransitionEvent.ExtendedWindowAttached
+import org.fcitx.fcitx5.android.input.bar.KawaiiBarStateMachine.TransitionEvent.PreeditUpdated
+import org.fcitx.fcitx5.android.input.bar.KawaiiBarStateMachine.TransitionEvent.WindowDetached
 import org.fcitx.fcitx5.android.input.bar.ui.CandidateUi
 import org.fcitx.fcitx5.android.input.bar.ui.IdleUi
 import org.fcitx.fcitx5.android.input.bar.ui.TitleUi
 import org.fcitx.fcitx5.android.input.broadcast.InputBroadcastReceiver
-import org.fcitx.fcitx5.android.input.candidates.HorizontalCandidateComponent
 import org.fcitx.fcitx5.android.input.candidates.expanded.ExpandedCandidateStyle
 import org.fcitx.fcitx5.android.input.candidates.expanded.window.FlexboxExpandedCandidateWindow
 import org.fcitx.fcitx5.android.input.candidates.expanded.window.GridExpandedCandidateWindow
+import org.fcitx.fcitx5.android.input.candidates.horizontal.HorizontalCandidateComponent
 import org.fcitx.fcitx5.android.input.clipboard.ClipboardWindow
 import org.fcitx.fcitx5.android.input.dependency.UniqueViewComponent
 import org.fcitx.fcitx5.android.input.dependency.context
@@ -52,6 +58,7 @@ import org.fcitx.fcitx5.android.input.dependency.inputMethodService
 import org.fcitx.fcitx5.android.input.dependency.theme
 import org.fcitx.fcitx5.android.input.editing.TextEditingWindow
 import org.fcitx.fcitx5.android.input.keyboard.CommonKeyActionListener
+import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView
 import org.fcitx.fcitx5.android.input.keyboard.KeyboardWindow
 import org.fcitx.fcitx5.android.input.popup.PopupComponent
 import org.fcitx.fcitx5.android.input.status.StatusAreaWindow
@@ -70,6 +77,7 @@ import splitties.views.dsl.core.matchParent
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import kotlin.math.min
 
 class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(),
     InputBroadcastReceiver {
@@ -82,12 +90,15 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private val commonKeyActionListener: CommonKeyActionListener by manager.must()
     private val popup: PopupComponent by manager.must()
 
-    private val clipboardSuggestion = AppPrefs.getInstance().clipboard.clipboardSuggestion
-    private val clipboardItemTimeout = AppPrefs.getInstance().clipboard.clipboardItemTimeout
-    private val expandedCandidateStyle by AppPrefs.getInstance().keyboard.expandedCandidateStyle
-    private val expandToolbarByDefault by AppPrefs.getInstance().keyboard.expandToolbarByDefault
-    private val toolbarNumRowOnPassword by AppPrefs.getInstance().keyboard.toolbarNumRowOnPassword
-    private val showVoiceInputButton by AppPrefs.getInstance().keyboard.showVoiceInputButton
+    private val prefs = AppPrefs.getInstance()
+
+    private val clipboardSuggestion = prefs.clipboard.clipboardSuggestion
+    private val clipboardItemTimeout = prefs.clipboard.clipboardItemTimeout
+    private val clipboardMaskSensitive by prefs.clipboard.clipboardMaskSensitive
+    private val expandedCandidateStyle by prefs.keyboard.expandedCandidateStyle
+    private val expandToolbarByDefault by prefs.keyboard.expandToolbarByDefault
+    private val toolbarNumRowOnPassword by prefs.keyboard.toolbarNumRowOnPassword
+    private val showVoiceInputButton by prefs.keyboard.showVoiceInputButton
 
     private var clipboardTimeoutJob: Job? = null
 
@@ -105,7 +116,11 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                 if (it.text.isEmpty()) {
                     isClipboardFresh = false
                 } else {
-                    idleUi.clipboardUi.text.text = it.text.take(42)
+                    idleUi.clipboardUi.text.text = if (it.sensitive && clipboardMaskSensitive) {
+                        ClipboardEntry.BULLET.repeat(min(42, it.text.length))
+                    } else {
+                        it.text.take(42)
+                    }
                     isClipboardFresh = true
                     launchClipboardTimeoutJob()
                 }
@@ -171,6 +186,13 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         service.requestHideSelf(0)
     }
 
+    private val swipeDownHideKeyboardCallback = CustomGestureView.OnGestureListener { _, e ->
+        if (e.type == CustomGestureView.GestureType.Up && e.totalY > 0) {
+            service.requestHideSelf(0)
+            true
+        } else false
+    }
+
     private var voiceInputSubtype: Pair<String, InputMethodSubtype>? = null
 
     private val switchToVoiceInputCallback = View.OnClickListener {
@@ -200,7 +222,12 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                     launchClipboardTimeoutJob()
                 }
             }
-            hideKeyboardButton.setOnClickListener(hideKeyboardCallback)
+            hideKeyboardButton.apply {
+                setOnClickListener(hideKeyboardCallback)
+                swipeEnabled = true
+                swipeThresholdY = dp(HEIGHT.toFloat())
+                onGestureListener = swipeDownHideKeyboardCallback
+            }
             buttonsUi.apply {
                 undoButton.setOnClickListener {
                     service.sendCombinationKeyEvents(KeyEvent.KEYCODE_Z, ctrl = true)
@@ -239,7 +266,13 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     }
 
     private val candidateUi by lazy {
-        CandidateUi(context, theme, horizontalCandidate.view)
+        CandidateUi(context, theme, horizontalCandidate.view).apply {
+            expandButton.apply {
+                swipeEnabled = true
+                swipeThresholdY = dp(HEIGHT.toFloat())
+                onGestureListener = swipeDownHideKeyboardCallback
+            }
+        }
     }
 
     private val titleUi by lazy {
@@ -277,6 +310,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
             )
         }
         candidateUi.expandButton.setIcon(R.drawable.ic_baseline_expand_more_24)
+        candidateUi.expandButton.contentDescription = context.getString(R.string.expand_candidates_list)
     }
 
     // set expand candidate button to close expand candidate
@@ -285,6 +319,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
             windowManager.attachWindow(KeyboardWindow)
         }
         candidateUi.expandButton.setIcon(R.drawable.ic_baseline_expand_less_24)
+        candidateUi.expandButton.contentDescription = context.getString(R.string.hide_candidates_list)
     }
 
     // should be used with setExpandButtonToAttach or setExpandButtonToDetach

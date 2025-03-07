@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.core
 
@@ -73,17 +73,29 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
     override suspend fun save() = withFcitxContext { saveFcitxState() }
     override suspend fun reloadConfig() = withFcitxContext { reloadFcitxConfig() }
 
-    override suspend fun sendKey(key: String, states: UInt, up: Boolean, timestamp: Int) =
-        withFcitxContext { sendKeyToFcitxString(key, states.toInt(), up, timestamp) }
+    override suspend fun sendKey(
+        key: String,
+        states: UInt,
+        code: Int,
+        up: Boolean,
+        timestamp: Int
+    ) =
+        withFcitxContext { sendKeyToFcitxString(key, states.toInt(), code, up, timestamp) }
 
-    override suspend fun sendKey(c: Char, states: UInt, up: Boolean, timestamp: Int) =
-        withFcitxContext { sendKeyToFcitxChar(c, states.toInt(), up, timestamp) }
+    override suspend fun sendKey(c: Char, states: UInt, code: Int, up: Boolean, timestamp: Int) =
+        withFcitxContext { sendKeyToFcitxChar(c, states.toInt(), code, up, timestamp) }
 
-    override suspend fun sendKey(sym: Int, states: UInt, up: Boolean, timestamp: Int) =
-        withFcitxContext { sendKeySymToFcitx(sym, states.toInt(), up, timestamp) }
+    override suspend fun sendKey(sym: Int, states: UInt, code: Int, up: Boolean, timestamp: Int) =
+        withFcitxContext { sendKeySymToFcitx(sym, states.toInt(), code, up, timestamp) }
 
-    override suspend fun sendKey(sym: KeySym, states: KeyStates, up: Boolean, timestamp: Int) =
-        withFcitxContext { sendKeySymToFcitx(sym.sym, states.toInt(), up, timestamp) }
+    override suspend fun sendKey(
+        sym: KeySym,
+        states: KeyStates,
+        code: Int,
+        up: Boolean,
+        timestamp: Int
+    ) =
+        withFcitxContext { sendKeySymToFcitx(sym.sym, states.toInt(), code, up, timestamp) }
 
     override suspend fun select(idx: Int): Boolean = withFcitxContext { selectCandidate(idx) }
     override suspend fun isEmpty(): Boolean = withFcitxContext { isInputPanelEmpty() }
@@ -143,8 +155,8 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
 
     override suspend fun triggerQuickPhrase() = withFcitxContext { triggerQuickPhraseInput() }
     override suspend fun triggerUnicode() = withFcitxContext { triggerUnicodeInput() }
-    private suspend fun setClipboard(string: String) =
-        withFcitxContext { setFcitxClipboard(string) }
+    private suspend fun setClipboard(string: String, password: Boolean = false) =
+        withFcitxContext { setFcitxClipboard(string, password) }
 
     override suspend fun focus(focus: Boolean) = withFcitxContext { focusInputContext(focus) }
     override suspend fun activate(uid: Int, pkgName: String) =
@@ -162,6 +174,18 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
 
     override suspend fun getCandidates(offset: Int, limit: Int): Array<String> =
         withFcitxContext { getFcitxCandidates(offset, limit) ?: emptyArray() }
+
+    override suspend fun getCandidateActions(idx: Int): Array<CandidateAction> =
+        withFcitxContext { getFcitxCandidateActions(idx) ?: emptyArray() }
+
+    override suspend fun triggerCandidateAction(idx: Int, actionIdx: Int) =
+        withFcitxContext { triggerFcitxCandidateAction(idx, actionIdx) }
+
+    override suspend fun setCandidatePagingMode(mode: Int) =
+        withFcitxContext { setFcitxCandidatePagingMode(mode) }
+
+    override suspend fun offsetCandidatePage(delta: Int) =
+        withFcitxContext { offsetFcitxCandidatePage(delta) }
 
     init {
         if (lifecycle.currentState != FcitxLifecycle.State.STOPPED)
@@ -208,9 +232,7 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
             appLib: String,
             extData: String,
             extCache: String,
-            extDomains: Array<String>,
-            libraryNames: Array<String>,
-            libraryDependencies: Array<Array<String>>
+            extDomains: Array<String>
         )
 
         @JvmStatic
@@ -226,13 +248,19 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         external fun reloadFcitxConfig()
 
         @JvmStatic
-        external fun sendKeyToFcitxString(key: String, state: Int, up: Boolean, timestamp: Int)
+        external fun sendKeyToFcitxString(
+            key: String,
+            state: Int,
+            code: Int,
+            up: Boolean,
+            timestamp: Int
+        )
 
         @JvmStatic
-        external fun sendKeyToFcitxChar(c: Char, state: Int, up: Boolean, timestamp: Int)
+        external fun sendKeyToFcitxChar(c: Char, state: Int, code: Int, up: Boolean, timestamp: Int)
 
         @JvmStatic
-        external fun sendKeySymToFcitx(sym: Int, state: Int, up: Boolean, timestamp: Int)
+        external fun sendKeySymToFcitx(sym: Int, state: Int, code: Int, up: Boolean, timestamp: Int)
 
         @JvmStatic
         external fun selectCandidate(idx: Int): Boolean
@@ -304,7 +332,7 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         external fun triggerUnicodeInput()
 
         @JvmStatic
-        external fun setFcitxClipboard(string: String)
+        external fun setFcitxClipboard(string: String, password: Boolean)
 
         @JvmStatic
         external fun focusInputContext(focus: Boolean)
@@ -326,6 +354,18 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
 
         @JvmStatic
         external fun getFcitxCandidates(offset: Int, limit: Int): Array<String>?
+
+        @JvmStatic
+        external fun getFcitxCandidateActions(idx: Int): Array<CandidateAction>?
+
+        @JvmStatic
+        external fun triggerFcitxCandidateAction(idx: Int, actionIdx: Int)
+
+        @JvmStatic
+        external fun setFcitxCandidatePagingMode(mode: Int)
+
+        @JvmStatic
+        external fun offsetFcitxCandidatePage(delta: Int)
 
         @JvmStatic
         external fun loopOnce()
@@ -357,16 +397,6 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
         // will be called in fcitx main thread
         private fun onFirstRun() {
             Timber.i("onFirstRun")
-            getFcitxGlobalConfig()?.get("cfg")?.apply {
-                get("Behavior").apply {
-                    get("ShareInputState").value = "All"
-                }
-                setFcitxGlobalConfig(this)
-            }
-            getFcitxAddonConfig("pinyin")?.get("cfg")?.apply {
-                get("QuickPhraseKey").value = ""
-                setFcitxAddonConfig("pinyin", this)
-            }
             firstRun = false
         }
 
@@ -392,17 +422,13 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
             val plugins = DataManager.getLoadedPlugins()
             val nativeLibDir = StringBuilder(context.applicationInfo.nativeLibraryDir)
             val extDomains = arrayListOf<String>()
-            val libraryNames = arrayListOf<String>()
-            val libraryDependency = arrayListOf<Array<String>>()
             plugins.forEach {
-                nativeLibDir.append(':')
-                nativeLibDir.append(it.nativeLibraryDir)
+                if (it.nativeLibraryDir.isNotBlank()) {
+                    nativeLibDir.append(':')
+                    nativeLibDir.append(it.nativeLibraryDir)
+                }
                 it.domain?.let { d ->
                     extDomains.add(d)
-                }
-                it.libraryDependency.forEach { (lib, dep) ->
-                    libraryNames.add(lib)
-                    libraryDependency.add(dep.toTypedArray())
                 }
             }
             Timber.d(
@@ -421,9 +447,7 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
                     nativeLibDir.toString(),
                     (getExternalFilesDir(null) ?: filesDir).absolutePath,
                     (externalCacheDir ?: cacheDir).absolutePath,
-                    extDomains.toTypedArray(),
-                    libraryNames.toTypedArray(),
-                    libraryDependency.toTypedArray()
+                    extDomains.toTypedArray()
                 )
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -454,7 +478,7 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
 
     @Keep
     private val onClipboardUpdate = ClipboardManager.OnClipboardUpdateListener {
-        lifecycle.lifecycleScope.launch { setClipboard(it.text) }
+        lifecycle.lifecycleScope.launch { setClipboard(it.text, it.sensitive) }
     }
 
     private fun computeAddonGraph() = runBlocking {

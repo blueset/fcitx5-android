@@ -4,6 +4,7 @@
  */
 #include <fcitx/addonfactory.h>
 #include <fcitx/addonmanager.h>
+#include <fcitx/candidatelist.h>
 #include <fcitx/inputcontextmanager.h>
 #include <fcitx/inputmethodengine.h>
 #include <fcitx/focusgroup.h>
@@ -49,7 +50,8 @@ public:
         const int before = -offset;
         const int after = offset + static_cast<int>(size);
         if (before < 0 || after < 0) {
-            FCITX_WARN() << "Invalid deleteSurrounding request: offset=" << offset << ", size=" << size;
+            FCITX_WARN() << "Invalid deleteSurrounding request: offset=" << offset << ", size="
+                         << size;
             return;
         }
         frontend_->deleteSurrounding(before, after);
@@ -66,9 +68,12 @@ public:
                 filterText(ip.auxUp()),
                 filterText(ip.auxDown())
         );
+    }
+
+    void updateCandidatesBulk() {
         std::vector<std::string> candidates;
         int size = 0;
-        const auto &list = ip.candidateList();
+        const auto &list = inputPanel().candidateList();
         if (list) {
             const auto &bulk = list->toBulk();
             if (bulk) {
@@ -80,7 +85,7 @@ public:
                         auto &candidate = bulk->candidateFromAll(i);
                         // maybe unnecessary; I don't see anywhere using `CandidateWord::setPlaceHolder`
                         // if (candidate.isPlaceHolder()) continue;
-                        candidates.emplace_back(filterString(candidate.text()));
+                        candidates.emplace_back(filterString(candidate.textWithComment()));
                     } catch (const std::invalid_argument &e) {
                         size = static_cast<int>(candidates.size());
                         break;
@@ -89,14 +94,44 @@ public:
             } else {
                 size = list->size();
                 for (int i = 0; i < size; i++) {
-                    candidates.emplace_back(filterString(list->candidate(i).text()));
+                    candidates.emplace_back(filterString(list->candidate(i).textWithComment()));
                 }
             }
         }
         frontend_->updateCandidateList(candidates, size);
     }
 
-    bool selectCandidate(int idx) {
+    void updateCandidatesPaged() {
+        const auto &list = inputPanel().candidateList();
+        if (!list) {
+            frontend_->updatePagedCandidate(PagedCandidateEntity::Empty);
+            return;
+        }
+        int cursorIndex = list->cursorIndex();
+        CandidateLayoutHint layoutHint = list->layoutHint();
+        bool hasPrev = false;
+        bool hasNext = false;
+        const auto &pageable = list->toPageable();
+        if (pageable) {
+            hasPrev = pageable->hasPrev();
+            hasNext = pageable->hasNext();
+        }
+        int size = list->size();
+        std::vector<CandidateEntity> candidates;
+        candidates.reserve(size);
+        for (int i = 0; i < size; i++) {
+            const auto &c = list->candidate(i);
+            candidates.emplace_back(
+                    filterString(list->label(i)),
+                    filterString(c.text()),
+                    filterString(c.comment())
+            );
+        }
+        PagedCandidateEntity paged(candidates, cursorIndex, layoutHint, hasPrev, hasNext);
+        frontend_->updatePagedCandidate(paged);
+    }
+
+    bool selectCandidateBulk(int idx) {
         const auto &list = inputPanel().candidateList();
         if (!list) {
             return false;
@@ -108,6 +143,20 @@ public:
             } else {
                 list->candidate(idx).select(this);
             }
+        } catch (const std::invalid_argument &e) {
+            FCITX_WARN() << "selectCandidate index out of range";
+            return false;
+        }
+        return true;
+    }
+
+    bool selectCandidatePaged(int idx) {
+        const auto &list = inputPanel().candidateList();
+        if (!list) {
+            return false;
+        }
+        try {
+            list->candidate(idx).select(this);
         } catch (const std::invalid_argument &e) {
             FCITX_WARN() << "selectCandidate index out of range";
             return false;
@@ -127,7 +176,7 @@ public:
                 for (int i = offset; i < end; i++) {
                     try {
                         auto &candidate = bulk->candidateFromAll(i);
-                        candidates.emplace_back(filterString(candidate.text()));
+                        candidates.emplace_back(filterString(candidate.textWithComment()));
                     } catch (const std::invalid_argument &e) {
                         break;
                     }
@@ -135,11 +184,92 @@ public:
             } else {
                 const int end = std::min(list->size(), last);
                 for (int i = offset; i < end; i++) {
-                    candidates.emplace_back(filterString(list->candidate(i).text()));
+                    candidates.emplace_back(filterString(list->candidate(i).textWithComment()));
                 }
             }
         }
         return candidates;
+    }
+
+    bool doesCandidateHaveAction(const int idx) {
+        const auto &list = inputPanel().candidateList();
+        if (!list) return false;
+        const auto &actionable = list->toActionable();
+        if (!actionable) return false;
+        if (idx >= list->size()) {
+            const auto &bulk = list->toBulk();
+            if (bulk && idx < bulk->totalSize()) {
+                const auto &c = bulk->candidateFromAll(idx);
+                return actionable->hasAction(c);
+            }
+            return false;
+        } else {
+            const auto &c = list->candidate(idx);
+            return actionable->hasAction(c);
+        }
+    }
+
+    std::vector<CandidateAction> getCandidateAction(const int idx) {
+        std::vector<CandidateAction> actions;
+        const auto &list = inputPanel().candidateList();
+        if (list) {
+            const auto &actionable = list->toActionable();
+            if (actionable) {
+                if (idx >= list->size()) {
+                    const auto &bulk = list->toBulk();
+                    if (bulk && idx < bulk->totalSize()) {
+                        const auto &c = bulk->candidateFromAll(idx);
+                        for (const auto &a: actionable->candidateActions(c)) {
+                            actions.emplace_back(a);
+                        }
+                    }
+                } else {
+                    const auto &c = list->candidate(idx);
+                    for (const auto &a: actionable->candidateActions(c)) {
+                        actions.emplace_back(a);
+                    }
+                }
+            }
+        }
+        return actions;
+    }
+
+    void triggerCandidateAction(const int idx, const int actionIdx) {
+        const auto &list = inputPanel().candidateList();
+        if (!list) return;
+        const auto &actionable = list->toActionable();
+        if (!actionable) return;
+        if (idx >= list->size()) {
+            const auto &bulk = list->toBulk();
+            if (bulk && idx < bulk->totalSize()) {
+                const auto &c = bulk->candidateFromAll(idx);
+                actionable->triggerAction(c, actionIdx);
+            }
+        } else {
+            const auto &c = list->candidate(idx);
+            actionable->triggerAction(c, actionIdx);
+        }
+    }
+
+    void offsetCandidatePage(int delta) {
+        if (delta == 0) {
+            return;
+        }
+        const auto &list = inputPanel().candidateList();
+        if (!list) {
+            return;
+        }
+        const auto &pageable = list->toPageable();
+        if (!pageable) {
+            return;
+        }
+        if (delta > 0 && pageable->hasNext()) {
+            pageable->next();
+            updateUserInterface(UserInterfaceComponent::InputPanel);
+        } else if (delta < 0 && pageable->hasPrev()) {
+            pageable->prev();
+            updateUserInterface(UserInterfaceComponent::InputPanel);
+        }
     }
 
 private:
@@ -160,7 +290,8 @@ AndroidFrontend::AndroidFrontend(Instance *instance)
           focusGroup_("android", instance->inputContextManager()),
           activeIC_(nullptr),
           icCache_(),
-          eventHandlers_() {
+          eventHandlers_(),
+          pagingMode_(0) {
     eventHandlers_.emplace_back(instance_->watchEvent(
             EventType::InputContextInputMethodActivated,
             EventWatcherPhase::Default,
@@ -176,7 +307,14 @@ AndroidFrontend::AndroidFrontend(Instance *instance)
                 auto &e = static_cast<InputContextFlushUIEvent &>(event);
                 switch (e.component()) {
                     case UserInterfaceComponent::InputPanel: {
-                        if (activeIC_) activeIC_->updateInputPanel();
+                        if (activeIC_) {
+                            activeIC_->updateInputPanel();
+                            if (pagingMode_ == 0) {
+                                activeIC_->updateCandidatesBulk();
+                            } else {
+                                activeIC_->updateCandidatesPaged();
+                            }
+                        }
                         break;
                     }
                     case UserInterfaceComponent::StatusArea: {
@@ -225,7 +363,21 @@ void AndroidFrontend::releaseInputContext(const int uid) {
 
 bool AndroidFrontend::selectCandidate(int idx) {
     if (!activeIC_) return false;
-    return activeIC_->selectCandidate(idx);
+    if (pagingMode_) {
+        return activeIC_->selectCandidatePaged(idx);
+    } else {
+        return activeIC_->selectCandidateBulk(idx);
+    }
+}
+
+std::vector<CandidateAction> AndroidFrontend::getCandidateActions(const int idx) {
+    if (!activeIC_) return {};
+    return activeIC_->getCandidateAction(idx);
+}
+
+void AndroidFrontend::triggerCandidateAction(const int idx, const int actionIdx) {
+    if (!activeIC_) return;
+    activeIC_->triggerCandidateAction(idx, actionIdx);
 }
 
 bool AndroidFrontend::isInputPanelEmpty() {
@@ -298,6 +450,19 @@ void AndroidFrontend::showToast(const std::string &s) {
     toastCallback(s);
 }
 
+void AndroidFrontend::setCandidatePagingMode(const int mode) {
+    pagingMode_ = mode;
+}
+
+void AndroidFrontend::updatePagedCandidate(const PagedCandidateEntity &paged) {
+    pagedCandidateCallback(paged);
+}
+
+void AndroidFrontend::offsetCandidatePage(int delta) {
+    if (!activeIC_) return;
+    activeIC_->offsetCandidatePage(delta);
+}
+
 void AndroidFrontend::setCommitStringCallback(const CommitStringCallback &callback) {
     commitStringCallback = callback;
 }
@@ -328,6 +493,10 @@ void AndroidFrontend::setDeleteSurroundingCallback(const DeleteSurroundingCallba
 
 void AndroidFrontend::setToastCallback(const ToastCallback &callback) {
     toastCallback = callback;
+}
+
+void AndroidFrontend::setPagedCandidateCallback(const PagedCandidateCallback &callback) {
+    pagedCandidateCallback = callback;
 }
 
 class AndroidFrontendFactory : public AddonFactory {

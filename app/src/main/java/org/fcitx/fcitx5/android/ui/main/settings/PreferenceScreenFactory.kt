@@ -1,9 +1,10 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2024 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.ui.main.settings
 
+import android.app.AlertDialog
 import android.content.Context
 import android.os.Build
 import androidx.core.content.ContextCompat
@@ -28,6 +29,7 @@ import org.fcitx.fcitx5.android.ui.main.modified.MySwitchPreference
 import org.fcitx.fcitx5.android.ui.main.settings.addon.AddonConfigFragment
 import org.fcitx.fcitx5.android.ui.main.settings.global.GlobalConfigFragment
 import org.fcitx.fcitx5.android.ui.main.settings.im.InputMethodConfigFragment
+import org.fcitx.fcitx5.android.utils.LongClickPreference
 import org.fcitx.fcitx5.android.utils.buildDocumentsProviderIntent
 import org.fcitx.fcitx5.android.utils.buildPrimaryStorageIntent
 import org.fcitx.fcitx5.android.utils.config.ConfigDescriptor
@@ -164,22 +166,32 @@ object PreferenceScreenFactory {
             }
         }
 
-        fun rimeUserDataDir() = Preference(context).apply {
+        fun rimeUserDataDir(title: String): Preference = LongClickPreference(context).apply {
             setOnPreferenceClickListener {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                AlertDialog.Builder(context)
+                    .setTitle(title)
+                    .setMessage(R.string.open_rime_user_data_dir)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        try {
+                            context.startActivity(buildDocumentsProviderIntent())
+                        } catch (e: Exception) {
+                            context.toast(e)
+                        }
+                    }
+                    .show()
+                true
+            }
+
+            // make it a hidden option, because of compatibility issues
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                setOnPreferenceLongClickListener {
                     try {
                         context.startActivity(buildPrimaryStorageIntent("data/rime"))
-                        return@setOnPreferenceClickListener true
                     } catch (e: Exception) {
-                        context.toast(e.localizedMessage ?: e.stackTraceToString())
+                        context.toast(e)
                     }
                 }
-                try {
-                    context.startActivity(buildDocumentsProviderIntent())
-                } catch (e: Exception) {
-                    context.toast(e.localizedMessage ?: e.stackTraceToString())
-                }
-                true
             }
         }
 
@@ -263,13 +275,15 @@ object PreferenceScreenFactory {
                 ConfigExternal.ETy.TableGlobal -> addonConfigPreference("table")
                 ConfigExternal.ETy.AndroidTable -> tableInputMethod()
                 ConfigExternal.ETy.PinyinCustomPhrase -> pinyinCustomPhrase()
-                ConfigExternal.ETy.RimeUserDataDir -> rimeUserDataDir()
+                ConfigExternal.ETy.RimeUserDataDir -> rimeUserDataDir(
+                    descriptor.description ?: descriptor.name
+                )
                 else -> stubPreference()
             }
             is ConfigInt -> {
                 val min = descriptor.intMin
                 val max = descriptor.intMax
-                if (min != null && max != null) {
+                if (min != null && max != null && max - min <= 100) {
                     DialogSeekBarPreference(context).apply {
                         summaryProvider = DialogSeekBarPreference.SimpleSummaryProvider
                         descriptor.defaultValue?.let { setDefaultValue(it) }

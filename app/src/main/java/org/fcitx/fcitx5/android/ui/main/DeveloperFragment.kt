@@ -4,7 +4,6 @@
  */
 package org.fcitx.fcitx5.android.ui.main
 
-import android.content.Intent
 import android.os.Bundle
 import android.os.Debug
 import androidx.activity.result.ActivityResultLauncher
@@ -13,16 +12,20 @@ import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.data.DataManager
+import org.fcitx.fcitx5.android.daemon.FcitxDaemon
 import org.fcitx.fcitx5.android.data.clipboard.ClipboardManager
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.ui.common.PaddingPreferenceFragment
 import org.fcitx.fcitx5.android.ui.main.modified.MySwitchPreference
+import org.fcitx.fcitx5.android.utils.AppUtil
 import org.fcitx.fcitx5.android.utils.addPreference
 import org.fcitx.fcitx5.android.utils.iso8601UTCDateTime
+import org.fcitx.fcitx5.android.utils.startActivity
 import org.fcitx.fcitx5.android.utils.toast
 import java.io.File
 
@@ -34,14 +37,17 @@ class DeveloperFragment : PaddingPreferenceFragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         launcher = registerForActivityResult(CreateDocument("application/octet-stream")) { uri ->
-            if (uri == null) return@registerForActivityResult
+            if (uri == null) {
+                hprofFile.delete()
+                return@registerForActivityResult
+            }
             val ctx = requireContext()
             lifecycleScope.launch(NonCancellable + Dispatchers.IO) {
                 runCatching {
                     ctx.contentResolver.openOutputStream(uri)!!.use { o ->
                         hprofFile.inputStream().use { i -> i.copyTo(o) }
                     }
-                }.toast(ctx)
+                }.let { ctx.toast(it) }
                 hprofFile.delete()
             }
         }
@@ -50,7 +56,7 @@ class DeveloperFragment : PaddingPreferenceFragment() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceScreen = preferenceManager.createPreferenceScreen(requireContext()).apply {
             addPreference(R.string.real_time_logs) {
-                context.startActivity(Intent(context, LogActivity::class.java))
+                startActivity<LogActivity>()
             }
             addPreference(MySwitchPreference(context).apply {
                 key = AppPrefs.getInstance().internal.verboseLog.key
@@ -59,6 +65,26 @@ class DeveloperFragment : PaddingPreferenceFragment() {
                 setDefaultValue(false)
                 isIconSpaceReserved = false
                 isSingleLineTitle = false
+                setOnPreferenceChangeListener { _, _ ->
+                    AlertDialog.Builder(context)
+                        .setTitle(R.string.verbose_log)
+                        .setMessage(R.string.restart_to_apply_settings)
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            lifecycleScope.launch {
+                                withContext(NonCancellable + Dispatchers.IO) {
+                                    FcitxDaemon.stopFcitx()
+                                }
+                                lifecycleScope.launch(NonCancellable + Dispatchers.Main) {
+                                    delay(400L)
+                                    AppUtil.exit()
+                                }
+                                AppUtil.showRestartNotification(context)
+                            }
+                        }
+                        .show()
+                    true
+                }
             })
             addPreference(MySwitchPreference(context).apply {
                 key = AppPrefs.getInstance().internal.editorInfoInspector.key
@@ -67,12 +93,29 @@ class DeveloperFragment : PaddingPreferenceFragment() {
                 isIconSpaceReserved = false
                 isSingleLineTitle = false
             })
+            addPreference(R.string.restart_fcitx_instance) {
+                AlertDialog.Builder(context)
+                    .setTitle(R.string.restart_fcitx_instance)
+                    .setMessage(R.string.restart_fcitx_instance_confirm)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        lifecycleScope.launch {
+                            withContext(NonCancellable + Dispatchers.IO) {
+                                FcitxDaemon.stopFcitx()
+                                withContext(Dispatchers.Main) {
+                                    context.toast(R.string.done)
+                                }
+                            }
+                        }
+                    }
+                    .show()
+            }
             addPreference(R.string.delete_and_sync_data) {
                 AlertDialog.Builder(context)
                     .setTitle(R.string.delete_and_sync_data)
                     .setMessage(R.string.delete_and_sync_data_message)
                     .setPositiveButton(android.R.string.ok) { _, _ ->
-                        lifecycleScope.launch(Dispatchers.IO) {
+                        lifecycleScope.launch(NonCancellable + Dispatchers.IO) {
                             DataManager.deleteAndSync()
                             withContext(Dispatchers.Main) {
                                 context.toast(R.string.synced)
@@ -87,7 +130,7 @@ class DeveloperFragment : PaddingPreferenceFragment() {
                     .setTitle(R.string.clear_clb_db)
                     .setMessage(R.string.clear_clp_db_confirm)
                     .setPositiveButton(android.R.string.ok) { _, _ ->
-                        lifecycleScope.launch(Dispatchers.IO) {
+                        lifecycleScope.launch(NonCancellable + Dispatchers.IO) {
                             ClipboardManager.nukeTable()
                             withContext(Dispatchers.Main) {
                                 context.toast(R.string.done)

@@ -6,8 +6,8 @@ package org.fcitx.fcitx5.android.ui.main
 
 import android.os.Bundle
 import android.view.Menu
-import android.view.MenuItem
 import android.view.ViewGroup
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts.CreateDocument
 import androidx.appcompat.app.AlertDialog
@@ -25,10 +25,9 @@ import org.fcitx.fcitx5.android.databinding.ActivityLogBinding
 import org.fcitx.fcitx5.android.ui.main.log.LogView
 import org.fcitx.fcitx5.android.utils.DeviceInfo
 import org.fcitx.fcitx5.android.utils.Logcat
-import org.fcitx.fcitx5.android.utils.applyTranslucentSystemBars
 import org.fcitx.fcitx5.android.utils.iso8601UTCDateTime
+import org.fcitx.fcitx5.android.utils.item
 import org.fcitx.fcitx5.android.utils.toast
-import splitties.resources.drawable
 import splitties.resources.styledColor
 import splitties.views.topPadding
 
@@ -50,14 +49,14 @@ class LogActivity : AppCompatActivity() {
                             writer.write(logView.currentLog)
                         }
                     }
-                }.toast(this@LogActivity)
+                }.let { toast(it) }
             }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        applyTranslucentSystemBars()
+        enableEdgeToEdge()
         val binding = ActivityLogBinding.inflate(layoutInflater)
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, windowInsets ->
             val statusBars = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars())
@@ -98,27 +97,14 @@ class LogActivity : AppCompatActivity() {
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        val iconTint = styledColor(android.R.attr.colorControlNormal)
         if (!fromCrash) {
-            menu.add(R.string.clear).apply {
-                icon = drawable(R.drawable.ic_baseline_delete_24)!!.apply {
-                    setTint(styledColor(android.R.attr.colorControlNormal))
-                }
-                setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
-                setOnMenuItemClickListener {
-                    logView.clear()
-                    true
-                }
+            menu.item(R.string.clear, R.drawable.ic_baseline_delete_24, iconTint, true) {
+                logView.clear()
             }
         }
-        menu.add(R.string.export).apply {
-            icon = drawable(R.drawable.ic_baseline_save_24)!!.apply {
-                setTint(styledColor(android.R.attr.colorControlNormal))
-            }
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
-            setOnMenuItemClickListener {
-                launcher.launch("$packageName-${iso8601UTCDateTime()}.txt")
-                true
-            }
+        menu.item(R.string.export, R.drawable.ic_baseline_save_24, iconTint, true) {
+            launcher.launch("$packageName-${iso8601UTCDateTime()}.txt")
         }
         return true
     }

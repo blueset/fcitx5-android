@@ -1,5 +1,3 @@
-@file:Suppress("UnstableApiUsage")
-
 plugins {
     id("org.fcitx.fcitx5.android.app-convention")
     id("org.fcitx.fcitx5.android.plugin-app-convention")
@@ -15,6 +13,7 @@ android {
     defaultConfig {
         applicationId = "org.fcitx.fcitx5.android.plugin.rime"
 
+        @Suppress("UnstableApiUsage")
         externalNativeBuild {
             cmake {
                 targets(
@@ -43,12 +42,12 @@ android {
     }
 }
 
-generateDataDescriptor {
-    symlinks.put("usr/share/rime-data/opencc", "usr/share/opencc")
+fcitxComponent {
+    installPrebuiltAssets = true
 }
 
-aboutLibraries {
-    configPath = "plugin/rime/licenses"
+generateDataDescriptor {
+    symlinks.put("usr/share/rime-data/opencc", "usr/share/opencc")
 }
 
 dependencies {

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(fcitx5-android-plugin-rime VERSION 0.0.8)
+project(fcitx5-android-plugin-rime VERSION ${VERSION_NAME})
 
 # For reproducible build
 add_link_options("LINKER:--hash-style=gnu,--build-id=none")
@@ -14,11 +14,8 @@ find_package(ECM MODULE)
 find_package(Fcitx5Core MODULE)
 find_package(Fcitx5Module MODULE)
 
-set(PREBUILT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/fcitx5/src/main/cpp/prebuilt")
-
-set(Rime_VERSION "1.9.0")
+set(Rime_VERSION "1.12.0")
 set(Rime_dependencies
-        "${PREBUILT_DIR}/boost/${ANDROID_ABI}/lib/libboost_filesystem.a"
         log # glog links to android log
         "${PREBUILT_DIR}/glog/${ANDROID_ABI}/lib/libglog.a"
         "${PREBUILT_DIR}/leveldb/${ANDROID_ABI}/lib/libleveldb.a"
@@ -27,6 +24,7 @@ set(Rime_dependencies
         "${PREBUILT_DIR}/opencc/${ANDROID_ABI}/lib/libopencc.a"
         "${PREBUILT_DIR}/yaml-cpp/${ANDROID_ABI}/lib/libyaml-cpp.a"
         )
+
 add_library(Rime_static STATIC IMPORTED)
 set_target_properties(Rime_static PROPERTIES
         IMPORTED_LOCATION "${PREBUILT_DIR}/librime/${ANDROID_ABI}/lib/librime.a"
@@ -41,3 +39,22 @@ set_target_properties(Rime_static PROPERTIES
 set(RIME_TARGET "-Wl,--whole-archive" Rime_static "-Wl,--no-whole-archive")
 set(RIME_DATA_DIR "${CMAKE_INSTALL_DATADIR}/rime-data")
 add_subdirectory(fcitx5-rime)
+
+install(FILES
+        "default.yaml"
+        "rime-essay/essay.txt"
+        "rime-prelude/key_bindings.yaml"
+        "rime-prelude/punctuation.yaml"
+        "rime-prelude/symbols.yaml"
+        "rime-luna-pinyin/luna_pinyin_fluency.schema.yaml"
+        "rime-luna-pinyin/luna_pinyin_simp.schema.yaml"
+        "rime-luna-pinyin/luna_pinyin_tw.schema.yaml"
+        "rime-luna-pinyin/luna_pinyin.dict.yaml"
+        "rime-luna-pinyin/luna_pinyin.schema.yaml"
+        "rime-luna-pinyin/luna_quanpin.schema.yaml"
+        "rime-luna-pinyin/pinyin.yaml"
+        "rime-stroke/stroke.dict.yaml"
+        "rime-stroke/stroke.schema.yaml"
+        DESTINATION "${FCITX_INSTALL_DATADIR}/rime-data"
+        COMPONENT prebuilt-assets
+        )

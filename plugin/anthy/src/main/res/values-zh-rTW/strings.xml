@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name_debug">Android 版的 Fcitx5（Anthy 外掛程式 | 除錯模式 for Colemak fork）</string>
-    <string name="app_name_release">Android 版的 Fcitx5（Anthy 外掛程式 for Colemak fork）</string>
+    <string name="app_name_debug">小企鵝輸入法（Anthy 外掛程式 | 除錯模式 for Colemak fork）</string>
+    <string name="app_name_release">小企鵝輸入法（Anthy 外掛程式 for Colemak fork）</string>
     <string name="description">Anthy（日語輸入法）引擎支援</string>
+    <string name="new_feature">新功能描述</string> <!-- Added a new feature string -->
 </resources>

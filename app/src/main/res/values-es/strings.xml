@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name_release">Fcitx5 para Android</string>
-    <string name="app_name_debug">Fcitx5 para Android (depuración)</string>
+    <string name="app_name_release">Fcitx5</string>
+    <string name="app_name_debug">Fcitx5 (depuración)</string>
     <string name="save">Guardar</string>
     <string name="input_methods">Métodos de entrada</string>
     <string name="add_input_method">Añadir método de entrada</string>
-    <string name="input_methods_conf">Configurar métodos de entrada</string>
     <string name="addons">Complementos</string>
-    <string name="addons_conf">Configurar complementos</string>
     <string name="conf">Configuración</string>
     <string name="global_options">Opciones globales</string>
     <string name="behavior">Comportamiento</string>
@@ -44,7 +42,7 @@
     <string name="delete">Eliminar</string>
     <string name="clipboard">Portapapeles</string>
     <string name="keyboard_height">Altura de teclado</string>
-    <string name="keyboard">Teclado</string>
+    <string name="virtual_keyboard">Teclado</string>
     <string name="version">Versión</string>
     <string name="source_code">Código fuente</string>
     <string name="privacy_policy">Normativa de privacidad</string>
@@ -92,7 +90,6 @@
     <string name="clipboard_edit_text_hint">Contenido del portapapeles</string>
     <string name="portrait">Vertical</string>
     <string name="landscape">Horizontal</string>
-    <string name="clipboard_suggestion">Mostrar sugerencia del portapapeles</string>
     <string name="disable_addon_warn_confirm">¿Confirma que quiere desactivarlo?</string>
     <string name="disabled">Desactivado</string>
     <string name="system_default">Predeterminado del sistema</string>

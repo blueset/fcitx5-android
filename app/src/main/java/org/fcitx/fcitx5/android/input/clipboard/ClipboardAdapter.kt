@@ -7,8 +7,6 @@ package org.fcitx.fcitx5.android.input.clipboard
 import android.os.Build
 import android.view.ViewGroup
 import android.widget.PopupMenu
-import androidx.annotation.DrawableRes
-import androidx.annotation.StringRes
 import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
@@ -16,12 +14,15 @@ import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.clipboard.db.ClipboardEntry
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.utils.DeviceUtil
-import splitties.resources.drawable
+import org.fcitx.fcitx5.android.utils.item
 import splitties.resources.styledColor
 import kotlin.math.min
 
-abstract class ClipboardAdapter :
-    PagingDataAdapter<ClipboardEntry, ClipboardAdapter.ViewHolder>(diffCallback) {
+abstract class ClipboardAdapter(
+    private val theme: Theme,
+    private val entryRadius: Float,
+    private val maskSensitive: Boolean
+) : PagingDataAdapter<ClipboardEntry, ClipboardAdapter.ViewHolder>(diffCallback) {
 
     companion object {
         private val diffCallback = object : DiffUtil.ItemCallback<ClipboardEntry>() {
@@ -43,10 +44,16 @@ abstract class ClipboardAdapter :
         /**
          * excerpt text to show on ClipboardEntryUi, to reduce render time of very long text
          * @param str text to excerpt
+         * @param mask mask text content with "•"
          * @param lines max output lines
          * @param chars max chars per output line
          */
-        fun excerptText(str: String, lines: Int = 4, chars: Int = 128) = buildString {
+        fun excerptText(
+            str: String,
+            mask: Boolean = false,
+            lines: Int = 4,
+            chars: Int = 128
+        ): String = buildString {
             val length = str.length
             var lineBreak = -1
             for (i in 1..lines) {
@@ -55,11 +62,20 @@ abstract class ClipboardAdapter :
                 lineBreak = str.indexOf('\n', start)
                 if (lineBreak < 0) {
                     // no line breaks remaining, substring to end of text
-                    append(str.substring(start, excerptEnd))
+                    if (mask) {
+                        append(ClipboardEntry.BULLET.repeat(excerptEnd - start))
+                    } else {
+                        append(str.substring(start, excerptEnd))
+                    }
                     break
                 } else {
+                    val end = min(excerptEnd, lineBreak)
                     // append one line exactly
-                    appendLine(str.substring(start, min(excerptEnd, lineBreak)))
+                    if (mask) {
+                        append(ClipboardEntry.BULLET.repeat(end - start))
+                    } else {
+                        appendLine(str.substring(start, end))
+                    }
                 }
             }
         }
@@ -70,39 +86,35 @@ abstract class ClipboardAdapter :
     class ViewHolder(val entryUi: ClipboardEntryUi) : RecyclerView.ViewHolder(entryUi.root)
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder =
-        ViewHolder(ClipboardEntryUi(parent.context, theme))
+        ViewHolder(ClipboardEntryUi(parent.context, theme, entryRadius))
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val entry = getItem(position) ?: return
         with(holder.entryUi) {
-            setEntry(excerptText(entry.text), entry.pinned)
+            setEntry(excerptText(entry.text, entry.sensitive && maskSensitive), entry.pinned)
             root.setOnClickListener {
                 onPaste(entry)
             }
             root.setOnLongClickListener {
-                val iconColor = ctx.styledColor(android.R.attr.colorControlNormal)
                 val popup = PopupMenu(ctx, root)
-                fun menuItem(@StringRes title: Int, @DrawableRes ic: Int, callback: () -> Unit) {
-                    popup.menu.add(title).apply {
-                        icon = ctx.drawable(ic)?.apply { setTint(iconColor) }
-                        setOnMenuItemClickListener {
-                            callback()
-                            true
-                        }
+                val menu = popup.menu
+                val iconTint = ctx.styledColor(android.R.attr.colorControlNormal)
+                if (entry.pinned) {
+                    menu.item(R.string.unpin, R.drawable.ic_outline_push_pin_24, iconTint) {
+                        onUnpin(entry.id)
+                    }
+                } else {
+                    menu.item(R.string.pin, R.drawable.ic_baseline_push_pin_24, iconTint) {
+                        onPin(entry.id)
                     }
                 }
-                if (entry.pinned) menuItem(R.string.unpin, R.drawable.ic_outline_push_pin_24) {
-                    onUnpin(entry.id)
-                } else menuItem(R.string.pin, R.drawable.ic_baseline_push_pin_24) {
-                    onPin(entry.id)
-                }
-                menuItem(R.string.edit, R.drawable.ic_baseline_edit_24) {
+                menu.item(R.string.edit, R.drawable.ic_baseline_edit_24, iconTint) {
                     onEdit(entry.id)
                 }
-                menuItem(R.string.delete, R.drawable.ic_baseline_delete_24) {
+                menu.item(R.string.delete, R.drawable.ic_baseline_delete_24, iconTint) {
                     onDelete(entry.id)
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !DeviceUtil.isSamsungOneUI) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !DeviceUtil.isSamsungOneUI && !DeviceUtil.isFlyme) {
                     popup.setForceShowIcon(true)
                 }
                 popup.setOnDismissListener {
@@ -122,8 +134,6 @@ abstract class ClipboardAdapter :
         popupMenu?.dismiss()
         popupMenu = null
     }
-
-    abstract val theme: Theme
 
     abstract fun onPaste(entry: ClipboardEntry)
 

@@ -1,8 +1,5 @@
-/*
- * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
- */
-@file:Suppress("UnstableApiUsage")
+import com.android.build.gradle.tasks.MergeSourceSetFolders
+import kotlinx.serialization.json.Json
 
 plugins {
     id("org.fcitx.fcitx5.android.app-convention")
@@ -29,8 +26,17 @@ android {
     }
 }
 
-generateDataDescriptor{
-    excludes.add("data.minify.json")
+// copy ClearURLsRules/data.min.json to apk assets
+tasks.withType<MergeSourceSetFolders>().all {
+    // mergeDebugAssets or mergeReleaseAssets
+    if (name.endsWith("Assets")) {
+        doLast {
+            val inFile = file("ClearURLsRules/data.min.json")
+            val outFile = outputDir.asFile.get().resolve("data.min.json")
+            // minify json
+            outFile.writeText(Json.parseToJsonElement(inFile.readText()).toString())
+        }
+    }
 }
 
 dependencies {

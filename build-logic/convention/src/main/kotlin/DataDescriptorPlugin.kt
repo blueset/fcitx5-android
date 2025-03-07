@@ -12,7 +12,13 @@ import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.logging.LogLevel
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.MapProperty
-import org.gradle.api.tasks.*
+import org.gradle.api.tasks.Delete
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
 import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.task
 import org.gradle.work.ChangeType
@@ -89,7 +95,6 @@ class DataDescriptorPlugin : Plugin<Project> {
 
         private val file by lazy { outputFile.get().asFile }
 
-
         private fun serialize(files: Map<String, String>, symlinks: Map<String, String>) {
             if (symlinks.keys.intersect(files.keys).isNotEmpty())
                 throw IllegalArgumentException("Symlink target cannot be path in files")
@@ -137,7 +142,7 @@ class DataDescriptorPlugin : Plugin<Project> {
                     return@forEach
                 logger.log(LogLevel.DEBUG, "${change.changeType}: ${change.normalizedPath}")
                 val relativeFile = change.file.relativeTo(file.parentFile)
-                val key = relativeFile.path
+                val key = relativeFile.path.replace(File.separatorChar, '/')
                 if (change.changeType == ChangeType.REMOVED || key in excludes.get()) {
                     map.remove(key)
                 } else {

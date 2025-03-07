@@ -1,9 +1,10 @@
-@file:Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
-
 /**
  * Copyright (C) 2021-2023 Fcitx 5 for Android Contributors
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
+
+@file:Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+
 package org.fcitx.fcitx5.android.lib.plugin_base
 
 import android.annotation.SuppressLint
@@ -21,19 +22,46 @@ import android.preference.PreferenceActivity
 import android.preference.PreferenceCategory
 import android.preference.PreferenceFragment
 import android.preference.PreferenceScreen
+import android.provider.Settings
+import android.view.LayoutInflater
+import android.view.Menu
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowInsets
+import android.widget.ListView
 import android.widget.Toast
 import com.mikepenz.aboutlibraries.Libs
 import com.mikepenz.aboutlibraries.entity.License
 import org.xmlpull.v1.XmlPullParser
+import kotlin.math.max
 
-@SuppressLint("ExportedPreferenceActivity")
 class AboutActivity : PreferenceActivity() {
+
+    // disallow loading any external fragment
+    override fun isValidFragment(fragmentName: String?) = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        actionBar?.setDisplayHomeAsUpEnabled(true)
         fragmentManager.beginTransaction()
             .replace(android.R.id.content, AboutContentFragment())
             .commit()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menu.add(R.string.app_info).setOnMenuItemClickListener {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                setData(Uri.fromParts("package", packageName, null))
+            })
+            true
+        }
+        menu.add(R.string.uninstall).setOnMenuItemClickListener {
+            startActivity(Intent(Intent.ACTION_DELETE).apply {
+                setData(Uri.fromParts("package", packageName, null))
+            })
+            true
+        }
+        return super.onCreateOptionsMenu(menu)
     }
 
     class AboutContentFragment : PreferenceFragment() {
@@ -143,6 +171,32 @@ class AboutActivity : PreferenceActivity() {
                 }
             }
             preferenceScreen = screen
+        }
+
+        override fun onCreateView(
+            inflater: LayoutInflater?,
+            container: ViewGroup?,
+            savedInstanceState: Bundle?
+        ): View? {
+            val view = super.onCreateView(inflater, container, savedInstanceState)
+            // 35+ forces edge-to-edge
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM && view != null) {
+                val listView = view.findViewById<ListView>(android.R.id.list)
+                listView.clipToPadding = false
+                listView.setOnApplyWindowInsetsListener { v, insets ->
+                    val status = insets.getInsets(WindowInsets.Type.statusBars())
+                    val navbar = insets.getInsets(WindowInsets.Type.navigationBars())
+                    val gesture = insets.getInsets(WindowInsets.Type.mandatorySystemGestures())
+                    v.setPadding(
+                        v.paddingLeft,
+                        status.top,
+                        v.paddingRight,
+                        max(navbar.bottom, gesture.bottom)
+                    )
+                    insets
+                }
+            }
+            return view
         }
 
         private fun showLicenseDialog(uniqueId: String, licenses: Set<License>): Boolean {

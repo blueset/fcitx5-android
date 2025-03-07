@@ -13,7 +13,6 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven("https://jitpack.io")
     }
 }
 
@@ -35,3 +34,4 @@ include(":plugin:hangul")
 include(":plugin:chewing")
 include(":plugin:sayura")
 include(":plugin:jyutping")
+include(":plugin:thai")

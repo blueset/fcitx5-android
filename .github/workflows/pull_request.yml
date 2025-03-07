@@ -12,30 +12,19 @@ jobs:
   build_pull_request:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os:
-          - ubuntu-22.04
+          - ubuntu-24.04
           # - macos-13
+          # - macos-14
           # - windows-2022
-        abi:
-          - armeabi-v7a
-          - arm64-v8a
-          - x86
-          - x86_64
-    env:
-      BUILD_ABI: ${{ matrix.abi }}
     steps:
       - name: Fetch source code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
-
-      - name: Regenerate symlinks pointing to submodule (Windows)
-        if: ${{ matrix.os == 'windows-2022' }}
-        run: |
-          Remove-Item -Recurse app/src/main/assets/usr/share, plugin/hangul/src/main/assets/usr/share/libhangul, plugin/chewing/src/main/assets/usr/share/libchewing, plugin/jyutping/src/main/assets/usr/share/libime
-          git checkout -- .
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -51,35 +40,36 @@ jobs:
           sdkmanager --install "cmake;3.22.1"
 
       - name: Install system dependencies (Ubuntu)
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
         run: |
           sudo apt update
           sudo apt install extra-cmake-modules gettext
 
       - name: Install system dependencies (macOS)
-        if: ${{ matrix.os == 'macos-13' }}
+        if: ${{ startsWith(matrix.os, 'macos') }}
         run: |
           brew install extra-cmake-modules
 
       - name: Install system dependencies (Windows)
-        if: ${{ matrix.os == 'windows-2022' }}
+        if: ${{ startsWith(matrix.os, 'windows') }}
         run: |
+          C:/msys64/usr/bin/pacman -Syu --noconfirm
           C:/msys64/usr/bin/pacman -S --noconfirm mingw-w64-ucrt-x86_64-gettext mingw-w64-ucrt-x86_64-extra-cmake-modules
           Add-Content $env:GITHUB_PATH "C:/msys64/ucrt64/bin"
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Build Debug APK
+      - name: Build Release APK
         run: |
-          ./gradlew :app:assembleDebug
-          ./gradlew :assembleDebugPlugins
+          ./gradlew :app:assembleRelease
+          ./gradlew :assembleReleasePlugins
 
       - name: Upload app
         uses: actions/upload-artifact@v4
         with:
-          name: app-${{ matrix.os }}-${{ matrix.abi }}
-          path: app/build/outputs/apk/debug/
+          name: app-${{ matrix.os }}
+          path: app/build/outputs/apk/release/
 
       - name: Pack plugins
         shell: bash
@@ -89,12 +79,12 @@ jobs:
           do
             if [ -d "plugin/${i}" ]
             then
-              mv "plugin/${i}/build/outputs/apk/debug" "plugins-to-upload/${i}"
+              mv "plugin/${i}/build/outputs/apk/release" "plugins-to-upload/${i}"
             fi
           done
 
       - name: Upload plugins
         uses: actions/upload-artifact@v4
         with:
-          name: plugins-${{ matrix.os }}-${{ matrix.abi }}
+          name: plugins-${{ matrix.os }}
           path: plugins-to-upload

@@ -1,5 +1,3 @@
-@file:Suppress("UnstableApiUsage")
-
 plugins {
     id("org.fcitx.fcitx5.android.app-convention")
     id("org.fcitx.fcitx5.android.native-app-convention")
@@ -18,6 +16,7 @@ android {
         applicationId = "org.fcitx.fcitx5.android"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        @Suppress("UnstableApiUsage")
         externalNativeBuild {
             cmake {
                 targets(
@@ -64,21 +63,22 @@ android {
 
 kotlin {
     sourceSets.configureEach {
-        kotlin.srcDir("$buildDir/generated/ksp/$name/kotlin/")
+        kotlin.srcDir(layout.buildDirectory.dir("generated/ksp/$name/kotlin"))
     }
 }
 
-aboutLibraries {
-    configPath = "app/licenses"
-}
-
 fcitxComponent {
-    installLibraries = listOf(
+    includeLibs = listOf(
         "fcitx5",
         "fcitx5-lua",
         "libime",
         "fcitx5-chinese-addons"
     )
+    // exclude (delete immediately after install) tables that nobody would use
+    excludeFiles = listOf("cangjie", "erbi", "qxm", "wanfeng").map {
+        "usr/share/fcitx5/inputmethod/$it.conf"
+    }
+    installPrebuiltAssets = true
 }
 
 ksp {
@@ -117,7 +117,8 @@ dependencies {
     implementation(libs.androidx.startup)
     implementation(libs.androidx.viewpager2)
     implementation(libs.material)
-    implementation(libs.arrow)
+    implementation(libs.arrow.core)
+    implementation(libs.arrow.functions)
     implementation(libs.imagecropper)
     implementation(libs.flexbox)
     implementation(libs.dependency)
@@ -139,6 +140,7 @@ dependencies {
     androidTestImplementation(libs.junit)
 }
 
+@Suppress("UnstableApiUsage")
 configurations {
     all {
         // remove Baseline Profile Installer or whatever it is...

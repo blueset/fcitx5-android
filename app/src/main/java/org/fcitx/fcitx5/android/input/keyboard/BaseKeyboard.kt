@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2025 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.input.keyboard
 
@@ -19,6 +19,7 @@ import org.fcitx.fcitx5.android.core.KeyStates
 import org.fcitx.fcitx5.android.core.KeySym
 import org.fcitx.fcitx5.android.data.InputFeedbacks
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
+import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView.GestureType
 import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView.OnGestureListener
@@ -56,7 +57,17 @@ abstract class BaseKeyboard(
     private val expandKeypressArea by prefs.keyboard.expandKeypressArea
     private val swipeSymbolDirection by prefs.keyboard.swipeSymbolDirection
 
+    private val spaceSwipeMoveCursor = prefs.keyboard.spaceSwipeMoveCursor
+    private val spaceKeys = mutableListOf<KeyView>()
+    private val spaceSwipeChangeListener = ManagedPreference.OnChangeListener<Boolean> { _, v ->
+        spaceKeys.forEach {
+            it.swipeEnabled = v
+        }
+    }
+
     private val vivoKeypressWorkaround by prefs.advanced.vivoKeypressWorkaround
+
+    private val hapticOnRepeat by prefs.keyboard.hapticOnRepeat
 
     var popupActionListener: PopupActionListener? = null
 
@@ -130,6 +141,7 @@ abstract class BaseKeyboard(
                 centerHorizontally()
             })
         }
+        spaceSwipeMoveCursor.registerOnChangeListener(spaceSwipeChangeListener)
     }
 
     private fun createKeyView(def: KeyDef): KeyView {
@@ -147,20 +159,22 @@ abstract class BaseKeyboard(
                 else -> InputFeedbacks.SoundEffect.Standard
             }
             if (def is SpaceKey) {
-                swipeEnabled = true
+                spaceKeys.add(this)
+                swipeEnabled = spaceSwipeMoveCursor.getValue()
                 swipeRepeatEnabled = true
                 swipeThresholdX = selectionSwipeThreshold
                 swipeThresholdY = disabledSwipeThreshold
-                onGestureListener = OnGestureListener { _, event ->
+                onGestureListener = OnGestureListener { view, event ->
                     when (event.type) {
                         GestureType.Move -> when (val count = event.countX) {
                             0 -> false
                             else -> {
                                 val sym =
                                     if (count > 0) FcitxKeyMapping.FcitxKey_Right else FcitxKeyMapping.FcitxKey_Left
-                                val action = KeyAction.SymAction(KeySym(sym), KeyStates.Empty)
+                                val action = KeyAction.SymAction(KeySym(sym), KeyStates.Virtual)
                                 repeat(count.absoluteValue) {
                                     onAction(action)
+                                    if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
                                 }
                                 true
                             }
@@ -173,12 +187,13 @@ abstract class BaseKeyboard(
                 swipeRepeatEnabled = true
                 swipeThresholdX = selectionSwipeThreshold
                 swipeThresholdY = disabledSwipeThreshold
-                onGestureListener = OnGestureListener { _, event ->
+                onGestureListener = OnGestureListener { view, event ->
                     when (event.type) {
                         GestureType.Move -> {
                             val count = event.countX
                             if (count != 0) {
                                 onAction(KeyAction.MoveSelectionAction(count))
+                                if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
                                 true
                             } else false
                         }
@@ -205,8 +220,9 @@ abstract class BaseKeyboard(
                     }
                     is KeyDef.Behavior.Repeat -> {
                         repeatEnabled = true
-                        onRepeatListener = { _ ->
+                        onRepeatListener = { view ->
                             onAction(it.action)
+                            if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
                         }
                     }
                     is KeyDef.Behavior.Swipe -> {

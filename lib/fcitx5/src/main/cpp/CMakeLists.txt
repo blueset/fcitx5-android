@@ -1,12 +1,14 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(fcitx5-android-lib-fcitx5 VERSION 0.0.8)
+project(fcitx5-android-lib-fcitx5 VERSION ${VERSION_NAME})
 
 # For reproducible build
 add_link_options("LINKER:--hash-style=gnu,--build-id=none")
 
 # dummy target to export src/main/cpp/cmake
 add_custom_target(cmake)
+# dummy target to export build/devel/usr/lib/cmake
+add_custom_target(devel)
 # dummy target to export "notifications_public.h"
 add_custom_target(notifications)
 
@@ -14,9 +16,6 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
 # cmake/FindECM.cmake
 find_package(ECM)
-
-# prebuilt dir
-set(PREBUILT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/prebuilt")
 
 # prebuilt fmt
 set(fmt_DIR "${PREBUILT_DIR}/fmt/${ANDROID_ABI}/lib/cmake/fmt")

@@ -20,6 +20,7 @@ import androidx.paging.PagingConfig
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
+import com.google.android.material.snackbar.BaseTransientBottomBar.BaseCallback
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.snackbar.SnackbarContentLayout
 import kotlinx.coroutines.Job
@@ -29,10 +30,13 @@ import org.fcitx.fcitx5.android.data.clipboard.ClipboardManager
 import org.fcitx.fcitx5.android.data.clipboard.db.ClipboardEntry
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
+import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.input.FcitxInputMethodService
 import org.fcitx.fcitx5.android.input.clipboard.ClipboardStateMachine.BooleanKey.ClipboardDbEmpty
 import org.fcitx.fcitx5.android.input.clipboard.ClipboardStateMachine.BooleanKey.ClipboardListeningEnabled
-import org.fcitx.fcitx5.android.input.clipboard.ClipboardStateMachine.State.*
+import org.fcitx.fcitx5.android.input.clipboard.ClipboardStateMachine.State.AddMore
+import org.fcitx.fcitx5.android.input.clipboard.ClipboardStateMachine.State.EnableListening
+import org.fcitx.fcitx5.android.input.clipboard.ClipboardStateMachine.State.Normal
 import org.fcitx.fcitx5.android.input.clipboard.ClipboardStateMachine.TransitionEvent.ClipboardDbUpdated
 import org.fcitx.fcitx5.android.input.clipboard.ClipboardStateMachine.TransitionEvent.ClipboardListeningUpdated
 import org.fcitx.fcitx5.android.input.dependency.inputMethodService
@@ -42,11 +46,11 @@ import org.fcitx.fcitx5.android.input.wm.InputWindow
 import org.fcitx.fcitx5.android.input.wm.InputWindowManager
 import org.fcitx.fcitx5.android.utils.AppUtil
 import org.fcitx.fcitx5.android.utils.EventStateMachine
+import org.fcitx.fcitx5.android.utils.item
 import org.mechdancer.dependency.manager.must
 import splitties.dimensions.dp
 import splitties.resources.styledColor
 import splitties.views.dsl.core.withTheme
-import kotlin.properties.Delegates
 
 class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
 
@@ -57,14 +61,9 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
     private val snackbarCtx by lazy {
         context.withTheme(R.style.InputViewSnackbarTheme)
     }
+    private var snackbarInstance: Snackbar? = null
 
     private lateinit var stateMachine: EventStateMachine<ClipboardStateMachine.State, ClipboardStateMachine.TransitionEvent, ClipboardStateMachine.BooleanKey>
-
-    private var isClipboardDbEmpty by Delegates.observable(ClipboardManager.itemCount == 0) { _, _, new ->
-        stateMachine.push(
-            ClipboardDbUpdated, ClipboardDbEmpty to new
-        )
-    }
 
     @Keep
     private val clipboardEnabledListener = ManagedPreference.OnChangeListener<Boolean> { _, it ->
@@ -73,8 +72,13 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
         )
     }
 
-    private val clipboardEnabledPref = AppPrefs.getInstance().clipboard.clipboardListening
-    private val clipboardReturnAfterPaste by AppPrefs.getInstance().clipboard.clipboardReturnAfterPaste
+    private val prefs = AppPrefs.getInstance().clipboard
+
+    private val clipboardEnabledPref = prefs.clipboardListening
+    private val clipboardReturnAfterPaste by prefs.clipboardReturnAfterPaste
+    private val clipboardMaskSensitive by prefs.clipboardMaskSensitive
+
+    private val clipboardEntryRadius by ThemeManager.prefs.clipboardEntryRadius
 
     private val clipboardEntriesPager by lazy {
         Pager(PagingConfig(pageSize = 16)) { ClipboardManager.allEntries() }
@@ -82,8 +86,11 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
     private var adapterSubmitJob: Job? = null
 
     private val adapter: ClipboardAdapter by lazy {
-        object : ClipboardAdapter() {
-            override val theme = this@ClipboardWindow.theme
+        object : ClipboardAdapter(
+            theme,
+            context.dp(clipboardEntryRadius.toFloat()),
+            clipboardMaskSensitive
+        ) {
             override fun onPin(id: Int) {
                 service.lifecycleScope.launch { ClipboardManager.pin(id) }
             }
@@ -158,27 +165,18 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
     private fun promptDeleteAll(skipPinned: Boolean) {
         promptMenu?.dismiss()
         promptMenu = PopupMenu(context, ui.deleteAllButton).apply {
-            menu.apply {
-                add(buildSpannedString {
-                    bold {
-                        color(context.styledColor(android.R.attr.colorAccent)) {
-                            append(context.getString(if (skipPinned) R.string.delete_all_except_pinned else R.string.delete_all_pinned_items))
-                        }
+            menu.add(buildSpannedString {
+                bold {
+                    color(context.styledColor(android.R.attr.colorAccent)) {
+                        append(context.getString(if (skipPinned) R.string.delete_all_except_pinned else R.string.delete_all_pinned_items))
                     }
-                }).apply {
-                    isEnabled = false
                 }
-                add(android.R.string.cancel).apply {
-                    setOnMenuItemClickListener { true }
-                }
-                add(android.R.string.ok).apply {
-                    setOnMenuItemClickListener {
-                        service.lifecycleScope.launch {
-                            val ids = ClipboardManager.deleteAll(skipPinned)
-                            showUndoSnackbar(*ids)
-                        }
-                        true
-                    }
+            }).isEnabled = false
+            menu.add(android.R.string.cancel)
+            menu.item(android.R.string.ok) {
+                service.lifecycleScope.launch {
+                    val ids = ClipboardManager.deleteAll(skipPinned)
+                    showUndoSnackbar(*ids)
                 }
             }
             setOnDismissListener {
@@ -188,22 +186,40 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
         }
     }
 
+    private val pendingDeleteIds = arrayListOf<Int>()
+
     @SuppressLint("RestrictedApi")
     private fun showUndoSnackbar(vararg id: Int) {
-        val str = context.resources.getString(R.string.num_items_deleted, id.size)
-        Snackbar.make(snackbarCtx, ui.root, str, Snackbar.LENGTH_LONG)
-            .setBackgroundTint(theme.keyBackgroundColor)
-            .setTextColor(theme.keyTextColor)
+        id.forEach { pendingDeleteIds.add(it) }
+        val str = context.resources.getString(R.string.num_items_deleted, pendingDeleteIds.size)
+        snackbarInstance = Snackbar.make(snackbarCtx, ui.root, str, Snackbar.LENGTH_LONG)
+            .setBackgroundTint(theme.popupBackgroundColor)
+            .setTextColor(theme.popupTextColor)
             .setActionTextColor(theme.genericActiveBackgroundColor)
             .setAction(R.string.undo) {
                 service.lifecycleScope.launch {
-                    ClipboardManager.undoDelete(*id)
+                    ClipboardManager.undoDelete(*pendingDeleteIds.toIntArray())
+                    pendingDeleteIds.clear()
                 }
             }
             .addCallback(object : Snackbar.Callback() {
                 override fun onDismissed(transientBottomBar: Snackbar, event: Int) {
-                    service.lifecycleScope.launch {
-                        ClipboardManager.realDelete()
+                    if (snackbarInstance === transientBottomBar) {
+                        snackbarInstance = null
+                    }
+                    when (event) {
+                        BaseCallback.DISMISS_EVENT_SWIPE,
+                        BaseCallback.DISMISS_EVENT_MANUAL,
+                        BaseCallback.DISMISS_EVENT_TIMEOUT -> {
+                            service.lifecycleScope.launch {
+                                ClipboardManager.realDelete()
+                                pendingDeleteIds.clear()
+                            }
+                        }
+                        BaseCallback.DISMISS_EVENT_ACTION,
+                        BaseCallback.DISMISS_EVENT_CONSECUTIVE -> {
+                            // user clicked "undo" or deleted more items which makes a new snackbar
+                        }
                     }
                 }
             }).apply {
@@ -223,18 +239,21 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
     }
 
     override fun onAttached() {
+        val isEmpty = ClipboardManager.itemCount == 0
+        val isListening = clipboardEnabledPref.getValue()
         val initialState = when {
-            !clipboardEnabledPref.getValue() -> EnableListening
-            isClipboardDbEmpty -> AddMore
+            !isListening -> EnableListening
+            isEmpty -> AddMore
             else -> Normal
         }
-        stateMachine = ClipboardStateMachine.new(initialState) {
+        stateMachine = ClipboardStateMachine.new(initialState, isEmpty, isListening) {
             ui.switchUiByState(it)
         }
         // manually switch to initial ui
         ui.switchUiByState(initialState)
         adapter.addLoadStateListener {
-            isClipboardDbEmpty = it.append.endOfPaginationReached && adapter.itemCount < 1
+            val empty = it.append.endOfPaginationReached && adapter.itemCount < 1
+            stateMachine.push(ClipboardDbUpdated, ClipboardDbEmpty to empty)
         }
         adapterSubmitJob = service.lifecycleScope.launch {
             clipboardEntriesPager.flow.collect {
@@ -249,6 +268,7 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
         adapter.onDetached()
         adapterSubmitJob?.cancel()
         promptMenu?.dismiss()
+        snackbarInstance?.dismiss()
     }
 
     override val title: String by lazy {

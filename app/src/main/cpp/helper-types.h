@@ -8,6 +8,12 @@
 #include <fcitx/action.h>
 #include <fcitx/menu.h>
 #include <fcitx/inputcontext.h>
+#include <fcitx/candidateaction.h>
+#include <fcitx/inputmethodengine.h>
+#include <fcitx/inputmethodentry.h>
+#include <fcitx/candidatelist.h>
+
+#include <utility>
 
 class InputMethodStatus {
 public:
@@ -82,5 +88,64 @@ public:
         }
     }
 };
+
+class CandidateActionEntity {
+public:
+    int id;
+    std::string text;
+    bool isSeparator;
+    std::string icon;
+    bool isCheckable;
+    bool isChecked;
+
+    explicit CandidateActionEntity(const fcitx::CandidateAction &act) :
+            id(act.id()),
+            text(act.text()),
+            isSeparator(act.isSeparator()),
+            icon(act.icon()),
+            isCheckable(act.isCheckable()),
+            isChecked(act.isChecked()) {}
+};
+
+class CandidateEntity {
+public:
+    std::string label;
+    std::string text;
+    std::string comment;
+
+    explicit CandidateEntity(std::string label, std::string text, std::string comment) :
+            label(std::move(label)),
+            text(std::move(text)),
+            comment(std::move(comment)) {}
+};
+
+class PagedCandidateEntity {
+public:
+    std::vector<CandidateEntity> candidates;
+    int cursorIndex;
+    fcitx::CandidateLayoutHint layoutHint;
+    bool hasPrev;
+    bool hasNext;
+
+    explicit PagedCandidateEntity(std::vector<CandidateEntity> candidates,
+                                  int cursorIndex,
+                                  fcitx::CandidateLayoutHint layoutHint,
+                                  bool hasPrev,
+                                  bool hasNext) :
+            candidates(std::move(candidates)),
+            cursorIndex(cursorIndex),
+            layoutHint(layoutHint),
+            hasPrev(hasPrev),
+            hasNext(hasNext) {}
+
+    static PagedCandidateEntity Empty;
+
+private:
+    PagedCandidateEntity() :
+            candidates({}), cursorIndex(-1), layoutHint(fcitx::CandidateLayoutHint::NotSet),
+            hasPrev(false), hasNext(false) {}
+};
+
+PagedCandidateEntity PagedCandidateEntity::Empty = PagedCandidateEntity();
 
 #endif //FCITX5_ANDROID_HELPER_TYPES_H

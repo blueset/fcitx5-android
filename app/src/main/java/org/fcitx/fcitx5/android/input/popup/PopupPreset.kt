@@ -28,8 +28,8 @@ val PopupPreset: Map<String, Array<String>> = hashMapOf(
     "d" to arrayOf("=", "D", "ð"),
     "h" to arrayOf("/", "H"),
     "n" to arrayOf("#", "N", "ñ", "ń"),
-    "e" to arrayOf("(", "E", "ê", "ë", "ē", "é", "ě", "è", "ė", "ę", "ȩ", "ḝ", "ə"),
-    "i" to arrayOf(")", "I", "î", "ï", "ī", "í", "ǐ", "ì", "į", "ı"),
+    "e" to arrayOf("(", "[", "{", "E", "ê", "ë", "ē", "é", "ě", "è", "ė", "ę", "ȩ", "ḝ", "ə"),
+    "i" to arrayOf(")", "]", "}", "I", "î", "ï", "ī", "í", "ǐ", "ì", "į", "ı"),
     "o" to arrayOf("&", "O", "ô", "ö", "ō", "ó", "ǒ", "ò", "œ", "ø", "õ"),
     "z" to arrayOf("'", "Z", "`", "ž", "ź", "ż"),
     "x" to arrayOf(":", "X", "×"),
@@ -147,8 +147,8 @@ val PopupPreset: Map<String, Array<String>> = hashMapOf(
     "+" to arrayOf("±"),
     "<" to arrayOf("≤", "«", "‹", "⟨"),
     "=" to arrayOf("∞", "≠", "≈"),
-    ">" to arrayOf("⟩", "»", "≥", "›"),
-    "°" to arrayOf("′", "″"),
+    ">" to arrayOf("≥", "»", "›", "⟩"),
+    "°" to arrayOf("′", "″", "‴"),
     "·" to arrayOf("♪", "♦", "♠", "♥", "♣"),
     //
     // Currency

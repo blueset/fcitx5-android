@@ -108,8 +108,7 @@ void AndroidKeyboardEngine::keyEvent(const InputMethodEntry &entry, KeyEvent &ev
         }
         if (key.isLAZ() || key.isUAZ() || validSym ||
             (!buffer.empty() && key.checkKeyList(FCITX_HYPHEN_APOS))) {
-            auto text = Key::keySymToUTF8(key.sym());
-            if (updateBuffer(inputContext, text)) {
+            if (updateBuffer(inputContext, event)) {
                 return event.filterAndAccept();
             }
         }
@@ -142,16 +141,16 @@ void AndroidKeyboardEngine::keyEvent(const InputMethodEntry &entry, KeyEvent &ev
             auto cursor = buffer.cursor();
             if (cursor > 0) {
                 buffer.setCursor(cursor - 1);
+                event.filterAndAccept();
+                return updateCandidate(entry, inputContext);
             }
-            event.filterAndAccept();
-            return updateCandidate(entry, inputContext);
         } else if (key.check(FcitxKey_Right) || key.check(FcitxKey_KP_Right)) {
             auto cursor = buffer.cursor();
             if (cursor < buffer.size()) {
                 buffer.setCursor(buffer.cursor() + 1);
+                event.filterAndAccept();
+                return updateCandidate(entry, inputContext);
             }
-            event.filterAndAccept();
-            return updateCandidate(entry, inputContext);
         }
     }
 
@@ -249,14 +248,22 @@ void AndroidKeyboardEngine::resetState(InputContext *inputContext, bool fromCand
 void AndroidKeyboardEngine::updateCandidate(const InputMethodEntry &entry, InputContext *inputContext) {
     inputContext->inputPanel().reset();
     auto *state = inputContext->propertyFor(&factory_);
+    const auto userInput = state->buffer_.userInput();
     std::vector<std::pair<std::string, std::string>> results;
     if (spell()) {
         results = spell()->call<ISpell::hintForDisplay>(entry.languageCode(),
                                                         SpellProvider::Default,
-                                                        state->buffer_.userInput(),
+                                                        userInput,
                                                         SpellCandidateSize);
     }
     auto candidateList = std::make_unique<CommonCandidateList>();
+    if (results.empty() || results.front().second != userInput) {
+        // TODO: comply with fcitx5 spell module's delim " _-,./?!%"
+        // it's fine in androidkeyboard because only "-" won't commit buffer
+        const auto segments = stringutils::split(userInput, "-");
+        const auto label = segments.size() > 1 ? segments.back() : userInput;
+        candidateList->append<AndroidKeyboardCandidateWord>(this, Text(label), userInput);
+    }
     for (const auto &result: results) {
         candidateList->append<AndroidKeyboardCandidateWord>(this, Text(result.first), result.second);
     }
@@ -283,18 +290,18 @@ void AndroidKeyboardEngine::updateUI(InputContext *inputContext) {
     inputContext->updateUserInterface(UserInterfaceComponent::InputPanel);
 }
 
-bool AndroidKeyboardEngine::updateBuffer(InputContext *inputContext, const std::string &chr) {
+bool AndroidKeyboardEngine::updateBuffer(InputContext *inputContext, const KeyEvent& event) {
     auto *entry = instance_->inputMethodEntry(inputContext);
     if (!entry) {
         return false;
     }
 
     auto *state = inputContext->propertyFor(&factory_);
-    const CapabilityFlags noPredictFlag{CapabilityFlag::Password,
-                                        CapabilityFlag::NoSpellCheck};
-    // no spell hint enabled or no supported dictionary
+    // word hint is disabled, input is password, or language not supported
     if (!*config_.enableWordHint ||
-        inputContext->capabilityFlags().testAny(noPredictFlag) ||
+        (!*config_.hintOnPhysicalKeyboard && !event.isVirtual()) ||
+        (*config_.editorControlledWordHint && inputContext->capabilityFlags().test(CapabilityFlag::NoSpellCheck)) ||
+        inputContext->capabilityFlags().test(CapabilityFlag::Password) ||
         !supportHint(entry->languageCode())) {
         return false;
     }
@@ -306,7 +313,7 @@ bool AndroidKeyboardEngine::updateBuffer(InputContext *inputContext, const std::
         buffer.type(preedit);
     }
 
-    buffer.type(chr);
+    buffer.type(Key::keySymToUTF8(event.key().sym()));
 
     if (buffer.size() >= MaxBufferSize) {
         commitBuffer(inputContext);

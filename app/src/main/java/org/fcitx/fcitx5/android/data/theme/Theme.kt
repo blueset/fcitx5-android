@@ -12,9 +12,9 @@ import android.graphics.drawable.Drawable
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
+import org.fcitx.fcitx5.android.utils.DarkenColorFilter
 import org.fcitx.fcitx5.android.utils.RectSerializer
 import org.fcitx.fcitx5.android.utils.appContext
-import org.fcitx.fcitx5.android.utils.darkenColorFilter
 import java.io.File
 
 @Serializable
@@ -29,6 +29,11 @@ sealed class Theme : Parcelable {
 
     abstract val keyBackgroundColor: Int
     abstract val keyTextColor: Int
+
+    //  Color of candidate text
+    abstract val candidateTextColor: Int
+    abstract val candidateLabelColor: Int
+    abstract val candidateCommentColor: Int
 
     abstract val altKeyBackgroundColor: Int
     abstract val altKeyTextColor: Int
@@ -67,6 +72,9 @@ sealed class Theme : Parcelable {
         override val keyboardColor: Int,
         override val keyBackgroundColor: Int,
         override val keyTextColor: Int,
+        override val candidateTextColor: Int,
+        override val candidateLabelColor: Int,
+        override val candidateCommentColor: Int,
         override val altKeyBackgroundColor: Int,
         override val altKeyTextColor: Int,
         override val accentKeyBackgroundColor: Int,
@@ -88,13 +96,14 @@ sealed class Theme : Parcelable {
             val srcFilePath: String,
             val brightness: Int = 70,
             val cropRect: @Serializable(RectSerializer::class) Rect?,
+            val cropRotation: Int = 0
         ) : Parcelable {
             fun toDrawable(): Drawable? {
                 val cropped = File(croppedFilePath)
                 if (!cropped.exists()) return null
                 val bitmap = BitmapFactory.decodeStream(cropped.inputStream()) ?: return null
                 return BitmapDrawable(appContext.resources, bitmap).apply {
-                    colorFilter = darkenColorFilter(100 - brightness)
+                    colorFilter = DarkenColorFilter(100 - brightness)
                 }
             }
         }
@@ -114,6 +123,9 @@ sealed class Theme : Parcelable {
         override val keyboardColor: Int,
         override val keyBackgroundColor: Int,
         override val keyTextColor: Int,
+        override val candidateTextColor: Int,
+        override val candidateLabelColor: Int,
+        override val candidateCommentColor: Int,
         override val altKeyBackgroundColor: Int,
         override val altKeyTextColor: Int,
         override val accentKeyBackgroundColor: Int,
@@ -139,6 +151,9 @@ sealed class Theme : Parcelable {
             keyboardColor: Number,
             keyBackgroundColor: Number,
             keyTextColor: Number,
+            candidateTextColor: Number,
+            candidateLabelColor: Number,
+            candidateCommentColor: Number,
             altKeyBackgroundColor: Number,
             altKeyTextColor: Number,
             accentKeyBackgroundColor: Number,
@@ -160,6 +175,9 @@ sealed class Theme : Parcelable {
             keyboardColor.toInt(),
             keyBackgroundColor.toInt(),
             keyTextColor.toInt(),
+            candidateTextColor.toInt(),
+            candidateLabelColor.toInt(),
+            candidateCommentColor.toInt(),
             altKeyBackgroundColor.toInt(),
             altKeyTextColor.toInt(),
             accentKeyBackgroundColor.toInt(),
@@ -184,6 +202,9 @@ sealed class Theme : Parcelable {
             keyboardColor,
             keyBackgroundColor,
             keyTextColor,
+            candidateTextColor,
+            candidateLabelColor,
+            candidateCommentColor,
             altKeyBackgroundColor,
             altKeyTextColor,
             accentKeyBackgroundColor,
@@ -205,6 +226,7 @@ sealed class Theme : Parcelable {
             originBackgroundImage: String,
             brightness: Int = 70,
             cropBackgroundRect: Rect? = null,
+            cropBackgroundRotation: Int = 0
         ) = Custom(
             name,
             isDark,
@@ -212,13 +234,17 @@ sealed class Theme : Parcelable {
                 croppedBackgroundImage,
                 originBackgroundImage,
                 brightness,
-                cropBackgroundRect
+                cropBackgroundRect,
+                cropBackgroundRotation
             ),
             backgroundColor,
             barColor,
             keyboardColor,
             keyBackgroundColor,
             keyTextColor,
+            candidateTextColor,
+            candidateLabelColor,
+            candidateCommentColor,
             altKeyBackgroundColor,
             altKeyTextColor,
             accentKeyBackgroundColor,

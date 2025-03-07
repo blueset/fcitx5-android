@@ -6,10 +6,14 @@
 package org.fcitx.fcitx5.android.data.theme
 
 import android.content.SharedPreferences
+import android.os.Build
 import androidx.annotation.StringRes
+import androidx.core.content.edit
+import org.fcitx.fcitx5.android.BuildConfig
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceCategory
+import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceEnum
 
 class ThemePrefs(sharedPreferences: SharedPreferences) :
     ManagedPreferenceCategory(R.string.theme, sharedPreferences) {
@@ -76,56 +80,42 @@ class ThemePrefs(sharedPreferences: SharedPreferences) :
 
     val keyRadius = int(R.string.key_radius, "key_radius", 4, 0, 48, "dp")
 
-    enum class PunctuationPosition {
-        Bottom,
-        TopRight;
+    val textEditingButtonRadius =
+        int(R.string.text_editing_button_radius, "text_editing_button_radius", 8, 0, 48, "dp")
 
-        companion object : ManagedPreference.StringLikeCodec<PunctuationPosition> {
-            override fun decode(raw: String): PunctuationPosition = valueOf(raw)
-        }
+    val clipboardEntryRadius =
+        int(R.string.clipboard_entry_radius, "clipboard_entry_radius", 2, 0, 48, "dp")
+
+    enum class PunctuationPosition(override val stringRes: Int) : ManagedPreferenceEnum {
+        Bottom(R.string.punctuation_pos_bottom),
+        TopRight(R.string.punctuation_pos_top_right);
     }
 
-    val punctuationPosition = list(
+    val punctuationPosition = enumList(
         R.string.punctuation_position,
         "punctuation_position",
-        PunctuationPosition.Bottom,
-        PunctuationPosition,
-        listOf(
-            PunctuationPosition.Bottom,
-            PunctuationPosition.TopRight
-        ),
-        listOf(
-            R.string.punctuation_pos_bottom,
-            R.string.punctuation_pos_top_right
-        )
+        PunctuationPosition.Bottom
     )
 
-    enum class NavbarBackground {
-        None,
-        ColorOnly,
-        Full;
-
-        companion object : ManagedPreference.StringLikeCodec<NavbarBackground> {
-            override fun decode(raw: String): NavbarBackground = valueOf(raw)
-        }
+    enum class NavbarBackground(override val stringRes: Int) : ManagedPreferenceEnum {
+        None(R.string.navbar_bkg_none),
+        ColorOnly(R.string.navbar_bkg_color_only),
+        Full(R.string.navbar_bkg_full);
     }
 
-    val navbarBackground = list(
+    val navbarBackground = enumList(
         R.string.navbar_background,
         "navbar_background",
-        NavbarBackground.Full,
-        NavbarBackground,
-        listOf(
-            NavbarBackground.None,
-            NavbarBackground.ColorOnly,
-            NavbarBackground.Full
-        ),
-        listOf(
-            R.string.navbar_bkg_none,
-            R.string.navbar_bkg_color_only,
-            R.string.navbar_bkg_full
-        )
-    )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) NavbarBackground.Full else NavbarBackground.ColorOnly,
+        // 35+ forces edge to edge
+        enableUiOn = { Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM }
+    ).apply {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            sharedPreferences.edit {
+                remove(this@apply.key)
+            }
+        }
+    }
 
     /**
      * When [followSystemDayNightTheme] is disabled, this theme is used.
@@ -140,14 +130,14 @@ class ThemePrefs(sharedPreferences: SharedPreferences) :
     val followSystemDayNightTheme = switch(
         R.string.follow_system_day_night_theme,
         "follow_system_dark_mode",
-        false,
+        true,
         summary = R.string.follow_system_day_night_theme_summary
     )
 
     val lightModeTheme = themePreference(
         R.string.light_mode_theme,
         "light_mode_theme",
-        ThemePreset.PixelLight,
+        if (BuildConfig.DEBUG) ThemePreset.MaterialLight else ThemePreset.PixelLight,
         enableUiOn = {
             followSystemDayNightTheme.getValue()
         })
@@ -155,7 +145,7 @@ class ThemePrefs(sharedPreferences: SharedPreferences) :
     val darkModeTheme = themePreference(
         R.string.dark_mode_theme,
         "dark_mode_theme",
-        ThemePreset.PixelDark,
+        if (BuildConfig.DEBUG) ThemePreset.MaterialDark else ThemePreset.PixelDark,
         enableUiOn = {
             followSystemDayNightTheme.getValue()
         })

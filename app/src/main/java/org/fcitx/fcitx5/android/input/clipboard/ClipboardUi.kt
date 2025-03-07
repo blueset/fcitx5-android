@@ -18,7 +18,12 @@ import splitties.dimensions.dp
 import splitties.views.backgroundColor
 import splitties.views.dsl.coordinatorlayout.coordinatorLayout
 import splitties.views.dsl.coordinatorlayout.defaultLParams
-import splitties.views.dsl.core.*
+import splitties.views.dsl.core.Ui
+import splitties.views.dsl.core.add
+import splitties.views.dsl.core.horizontalLayout
+import splitties.views.dsl.core.lParams
+import splitties.views.dsl.core.matchParent
+import splitties.views.dsl.core.view
 import splitties.views.dsl.recyclerview.recyclerView
 import timber.log.Timber
 
@@ -48,7 +53,9 @@ class ClipboardUi(override val ctx: Context, private val theme: Theme) : Ui {
         add(viewAnimator, defaultLParams(matchParent, matchParent))
     }
 
-    val deleteAllButton = ToolButton(ctx, R.drawable.ic_baseline_delete_sweep_24, theme)
+    val deleteAllButton = ToolButton(ctx, R.drawable.ic_baseline_delete_sweep_24, theme).apply {
+        contentDescription = ctx.getString(R.string.delete_all)
+    }
 
     val extension = horizontalLayout {
         add(deleteAllButton, lParams(dp(40), dp(40)))
