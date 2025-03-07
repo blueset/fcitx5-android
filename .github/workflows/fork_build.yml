@@ -11,8 +11,8 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          - macos-13
-          - windows-2022
+          # - macos-13
+          # - windows-2022
         abi:
           - armeabi-v7a
           - arm64-v8a
@@ -34,7 +34,7 @@ jobs:
           git checkout -- *
 
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "17"
@@ -73,12 +73,12 @@ jobs:
           ./gradlew :assembleDebugPlugins
           ./gradlew :assembleReleasePlugins
       - name: Upload debug app
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: app-${{ matrix.os }}-${{ matrix.abi }}
           path: app/build/outputs/apk/debug/
       - name: Upload release app
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: app-${{ matrix.os }}-${{ matrix.abi }}-release
           path: app/build/outputs/apk/release/
@@ -109,17 +109,17 @@ jobs:
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
           output: signed-apks/
       - name: Upload plugins
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: plugins-${{ matrix.os }}-${{ matrix.abi }}
           path: plugins-to-upload
       - name: Upload release plugins
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: plugins-${{ matrix.os }}-${{ matrix.abi }}-release
           path: plugins-to-upload-release
       - name: Upload signed APKs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: signed-${{ matrix.os }}-${{ matrix.abi }}
           path: signed-apks
