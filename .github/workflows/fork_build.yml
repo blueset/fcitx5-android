@@ -123,4 +123,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: signed-${{ matrix.os }}-${{ matrix.abi }}
-          path: ${{ steps.sign_apks.outputs.signedFile }}
+          path: ${{ steps.sign_apks.outputs.signedReleaseFile }}
