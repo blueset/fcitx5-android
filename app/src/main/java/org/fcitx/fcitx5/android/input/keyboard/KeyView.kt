@@ -300,6 +300,7 @@ class AltTextKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.AltText)
             topToTop = parentId
             bottomToBottom = parentId
         }
+        altText.visibility = View.VISIBLE
         altText.updateLayoutParams<ConstraintLayout.LayoutParams> {
             // reset
             bottomToBottom = unset; bottomMargin = 0
@@ -318,6 +319,7 @@ class AltTextKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.AltText)
             topToTop = parentId; topMargin = vMargin
             bottomToTop = altText.existingOrNewId
         }
+        altText.visibility = View.VISIBLE
         altText.updateLayoutParams<ConstraintLayout.LayoutParams> {
             // reset
             topToTop = unset; topMargin = 0
@@ -329,6 +331,18 @@ class AltTextKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.AltText)
         }
     }
 
+    private fun applyNoAltTextPosition() {
+        mainText.updateLayoutParams<ConstraintLayout.LayoutParams> {
+            // reset
+            topMargin = 0
+            bottomToTop = unset
+            // set
+            topToTop = parentId
+            bottomToBottom = parentId
+        }
+        altText.visibility = View.GONE
+    }
+
     private fun applyLayout(orientation: Int) {
         when (ThemeManager.prefs.punctuationPosition.getValue()) {
             PunctuationPosition.Bottom -> when (orientation) {
@@ -336,6 +350,7 @@ class AltTextKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.AltText)
                 else -> applyBottomAltTextPosition()
             }
             PunctuationPosition.TopRight -> applyTopRightAltTextPosition()
+            PunctuationPosition.None -> applyNoAltTextPosition()
         }
     }
 

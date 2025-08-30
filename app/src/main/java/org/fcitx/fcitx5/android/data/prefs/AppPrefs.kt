@@ -20,6 +20,7 @@ import org.fcitx.fcitx5.android.input.keyboard.LangSwitchBehavior
 import org.fcitx.fcitx5.android.input.keyboard.SpaceLongPressBehavior
 import org.fcitx.fcitx5.android.input.keyboard.SwipeSymbolDirection
 import org.fcitx.fcitx5.android.input.picker.PickerWindow
+import org.fcitx.fcitx5.android.input.popup.EmojiModifier
 import org.fcitx.fcitx5.android.utils.DeviceUtil
 import org.fcitx.fcitx5.android.utils.appContext
 import org.fcitx.fcitx5.android.utils.vibrator
@@ -294,6 +295,9 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         val fontSize =
             int(R.string.candidates_font_size, "candidates_window_font_size", 20, 4, 64, "sp")
 
+        val windowRadius =
+            int(R.string.candidates_window_radius, "candidates_window_radius", 0, 0, 48, "dp")
+
         val itemPaddingVertical: ManagedPreference.PInt
         val itemPaddingHorizontal: ManagedPreference.PInt
 
@@ -341,6 +345,20 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         ) { clipboardListening.getValue() }
     }
 
+    inner class Symbols : ManagedPreferenceCategory(R.string.emoji_and_symbols, sharedPreferences) {
+        val hideUnsupportedEmojis = switch(
+            R.string.hide_unsupported_emojis,
+            "hide_unsupported_emojis",
+            true
+        )
+
+        val defaultEmojiSkinTone = enumList(
+            R.string.default_emoji_skin_tone,
+            "default_emoji_skin_tone",
+            EmojiModifier.SkinTone.Default,
+        )
+    }
+
     private val providers = mutableListOf<ManagedPreferenceProvider>()
 
     fun <T : ManagedPreferenceProvider> registerProvider(
@@ -359,6 +377,7 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
     val keyboard = Keyboard().register()
     val candidates = Candidates().register()
     val clipboard = Clipboard().register()
+    val symbols = Symbols().register()
     val advanced = Advanced().register()
 
     @Keep

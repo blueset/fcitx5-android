@@ -14,6 +14,7 @@ import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 import org.fcitx.fcitx5.android.utils.DarkenColorFilter
 import org.fcitx.fcitx5.android.utils.RectSerializer
+import org.fcitx.fcitx5.android.utils.alpha
 import org.fcitx.fcitx5.android.utils.appContext
 import java.io.File
 
@@ -261,4 +262,94 @@ sealed class Theme : Parcelable {
         )
     }
 
+    @Parcelize
+    data class Monet(
+        override val name: String,
+        override val isDark: Boolean,
+        override val backgroundColor: Int,
+        override val barColor: Int,
+        override val keyboardColor: Int,
+        override val keyBackgroundColor: Int,
+        override val keyTextColor: Int,
+        override val candidateTextColor: Int,
+        override val candidateLabelColor: Int,
+        override val candidateCommentColor: Int,
+        override val altKeyBackgroundColor: Int,
+        override val altKeyTextColor: Int,
+        override val accentKeyBackgroundColor: Int,
+        override val accentKeyTextColor: Int,
+        override val keyPressHighlightColor: Int,
+        override val keyShadowColor: Int,
+        override val popupBackgroundColor: Int,
+        override val popupTextColor: Int,
+        override val spaceBarColor: Int,
+        override val dividerColor: Int,
+        override val clipboardEntryColor: Int,
+        override val genericActiveBackgroundColor: Int,
+        override val genericActiveForegroundColor: Int
+    ) : Theme() {
+        constructor(
+            isDark: Boolean,
+            surfaceContainer: Int,
+            surfaceContainerHigh: Int,
+            surfaceBright: Int,
+            onSurface: Int,
+            primary: Int,
+            onPrimary: Int,
+            secondaryContainer: Int,
+            onSurfaceVariant: Int,
+        ) : this(
+            name = "Monet" + if (isDark) "Dark" else "Light",
+            isDark = isDark,
+            backgroundColor = surfaceContainer,
+            barColor = surfaceContainerHigh,
+            keyboardColor = surfaceContainer,
+            keyBackgroundColor = surfaceBright,
+            keyTextColor = onSurface,
+            candidateTextColor = onSurface,
+            candidateLabelColor = onSurface,
+            candidateCommentColor = onSurfaceVariant,
+            altKeyBackgroundColor = secondaryContainer,
+            altKeyTextColor = onSurfaceVariant,
+            accentKeyBackgroundColor = primary,
+            accentKeyTextColor = onPrimary,
+            keyPressHighlightColor = onSurface.alpha(if (isDark) 0.2f else 0.12f),
+            keyShadowColor = 0x000000,
+            popupBackgroundColor = surfaceContainer,
+            popupTextColor = onSurface,
+            spaceBarColor = surfaceBright,
+            dividerColor = surfaceBright,
+            clipboardEntryColor = surfaceBright,
+            genericActiveBackgroundColor = primary,
+            genericActiveForegroundColor = onPrimary
+        )
+
+        @OptIn(ExperimentalStdlibApi::class)
+        fun toCustom() = Custom(
+            name = name + "#" + this.accentKeyBackgroundColor.toHexString(), // Use primary color as identifier
+            isDark = isDark,
+            backgroundImage = null,
+            backgroundColor = backgroundColor,
+            barColor = barColor,
+            keyboardColor = keyboardColor,
+            keyBackgroundColor = keyBackgroundColor,
+            keyTextColor = keyTextColor,
+            candidateTextColor = candidateTextColor,
+            candidateLabelColor = candidateLabelColor,
+            candidateCommentColor = candidateCommentColor,
+            altKeyBackgroundColor = altKeyBackgroundColor,
+            altKeyTextColor = altKeyTextColor,
+            accentKeyBackgroundColor = accentKeyBackgroundColor,
+            accentKeyTextColor = accentKeyTextColor,
+            keyPressHighlightColor = keyPressHighlightColor,
+            keyShadowColor = keyShadowColor,
+            popupBackgroundColor = popupBackgroundColor,
+            popupTextColor = popupTextColor,
+            spaceBarColor = spaceBarColor,
+            dividerColor = dividerColor,
+            clipboardEntryColor = clipboardEntryColor,
+            genericActiveBackgroundColor = genericActiveBackgroundColor,
+            genericActiveForegroundColor = genericActiveForegroundColor
+        )
+    }
 }

@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * SPDX-FileCopyrightText: Copyright 2021-2023 Fcitx5 for Android Contributors
+ * SPDX-FileCopyrightText: Copyright 2021-2025 Fcitx5 for Android Contributors
  */
 package org.fcitx.fcitx5.android.ui.main.settings.theme
 
@@ -9,6 +9,7 @@ import android.content.res.ColorStateList
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.ShapeDrawable
 import android.graphics.drawable.shapes.OvalShape
+import android.os.Build
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.widget.ImageView
@@ -25,6 +26,7 @@ import splitties.views.dsl.constraintlayout.constraintLayout
 import splitties.views.dsl.constraintlayout.endOfParent
 import splitties.views.dsl.constraintlayout.lParams
 import splitties.views.dsl.constraintlayout.rightOfParent
+import splitties.views.dsl.constraintlayout.startOfParent
 import splitties.views.dsl.constraintlayout.topOfParent
 import splitties.views.dsl.core.Ui
 import splitties.views.dsl.core.add
@@ -59,6 +61,12 @@ class ThemeThumbnailUi(override val ctx: Context) : Ui {
         imageResource = R.drawable.ic_baseline_edit_24
     }
 
+    val dynamicIcon = imageView {
+        setPaddingDp(5, 5, 5, 5)
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        imageResource = R.drawable.ic_baseline_auto_awesome_24
+    }
+
     override val root = constraintLayout {
         outlineProvider = ViewOutlineProvider.BOUNDS
         elevation = dp(2f)
@@ -79,6 +87,10 @@ class ThemeThumbnailUi(override val ctx: Context) : Ui {
         add(editButton, lParams(dp(44), dp(44)) {
             topOfParent()
             endOfParent()
+        })
+        add(dynamicIcon, lParams(dp(32), dp(32)) {
+            topOfParent()
+            startOfParent()
         })
     }
 
@@ -102,6 +114,11 @@ class ThemeThumbnailUi(override val ctx: Context) : Ui {
             background = rippleDrawable(theme.keyPressHighlightColor)
             imageTintList = foregroundTint
         }
+        dynamicIcon.apply {
+            visibility =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && theme is Theme.Monet) View.VISIBLE else View.GONE
+            imageTintList = foregroundTint
+        }
         checkMark.imageTintList = foregroundTint
     }
 
@@ -115,8 +132,8 @@ class ThemeThumbnailUi(override val ctx: Context) : Ui {
         checkMark.imageResource = when (state) {
             State.Normal -> 0
             State.Selected -> R.drawable.ic_baseline_check_24
-            State.LightMode -> R.drawable.ic_sharp_light_mode_24
-            State.DarkMode -> R.drawable.ic_sharp_mode_night_24
+            State.LightMode -> R.drawable.ic_baseline_light_mode_24
+            State.DarkMode -> R.drawable.ic_baseline_dark_mode_24
         }
     }
 }

@@ -6,7 +6,6 @@ package org.fcitx.fcitx5.android.data
 
 import android.media.AudioManager
 import android.os.Build
-import android.os.Build.VERSION
 import android.os.VibrationEffect
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
@@ -71,19 +70,24 @@ object InputFeedbacks {
         } else {
             duration = buttonPressVibrationMilliseconds.toLong()
             amplitude = buttonPressVibrationAmplitude
-            hfc = if (VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 && keyUp) {
+            hfc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 && keyUp) {
                 HapticFeedbackConstants.KEYBOARD_RELEASE
             } else {
                 HapticFeedbackConstants.KEYBOARD_TAP
             }
         }
-        val useVibrator = duration != 0L
 
-        if (useVibrator) {
+        // there is `VibrationEffect.DEFAULT_AMPLITUDE` but no default duration;
+        // also `VibrationEffect.createOneShot()` only accepts positive duration.
+        // so changing amplitude without changing duration makes no sense
+        if (duration != 0L) {
             // on Android 13, if system haptic feedback was disabled, `vibrator.vibrate()` won't work
             // but `view.performHapticFeedback()` with `FLAG_IGNORE_GLOBAL_SETTING` still works
             if (hasAmplitudeControl && amplitude != 0) {
                 vibrator.vibrate(VibrationEffect.createOneShot(duration, amplitude))
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val ve = VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE)
+                vibrator.vibrate(ve)
             } else {
                 @Suppress("DEPRECATION")
                 vibrator.vibrate(duration)

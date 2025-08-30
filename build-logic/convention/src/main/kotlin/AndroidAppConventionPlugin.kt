@@ -141,13 +141,17 @@ class AndroidAppConventionPlugin : AndroidBaseConventionPlugin() {
         target.pluginManager.apply(target.libs.plugins.aboutlibraries.get().pluginId)
 
         target.configure<AboutLibrariesExtension> {
-            configPath = target.rootProject.relativePath(target.file("licenses"))
-            excludeFields = arrayOf(
-                "generated", "developers", "organization", "scm", "funding", "content"
-            )
-            fetchRemoteLicense = false
-            fetchRemoteFunding = false
-            includePlatform = false
+            collect {
+                configPath.set(target.file("licenses").takeIf { it.exists() })
+                fetchRemoteLicense.set(false)
+                fetchRemoteFunding.set(false)
+                includePlatform.set(false)
+            }
+            export {
+                excludeFields.set(
+                    setOf("generated", "developers", "organization", "scm", "funding", "content")
+                )
+            }
         }
 
         target.dependencies.add("coreLibraryDesugaring", target.libs.android.desugarJDKLibs)

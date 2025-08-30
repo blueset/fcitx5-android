@@ -6,8 +6,10 @@
 package org.fcitx.fcitx5.android.input
 
 import android.annotation.SuppressLint
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver.OnGlobalLayoutListener
 import android.view.ViewTreeObserver.OnPreDrawListener
 import android.view.WindowInsets
@@ -22,7 +24,6 @@ import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.input.candidates.floating.PagedCandidatesUi
 import org.fcitx.fcitx5.android.input.preedit.PreeditUi
 import splitties.dimensions.dp
-import splitties.views.backgroundColor
 import splitties.views.dsl.constraintlayout.below
 import splitties.views.dsl.constraintlayout.bottomOfParent
 import splitties.views.dsl.constraintlayout.centerHorizontally
@@ -49,6 +50,7 @@ class CandidatesView(
     private val orientation by candidatesPrefs.orientation
     private val windowMinWidth by candidatesPrefs.windowMinWidth
     private val windowPadding by candidatesPrefs.windowPadding
+    private val windowRadius by candidatesPrefs.windowRadius
     private val fontSize by candidatesPrefs.fontSize
     private val itemPaddingVertical by candidatesPrefs.itemPaddingVertical
     private val itemPaddingHorizontal by candidatesPrefs.itemPaddingHorizontal
@@ -95,7 +97,8 @@ class CandidatesView(
 
     private val preeditUi = PreeditUi(ctx, theme, setupTextView)
 
-    private val candidatesUi = PagedCandidatesUi(ctx, theme, setupTextView,
+    private val candidatesUi = PagedCandidatesUi(
+        ctx, theme, setupTextView,
         onCandidateClick = { index -> fcitx.launchOnReady { it.select(index) } },
         onPrevPage = { fcitx.launchOnReady { it.offsetCandidatePage(-1) } },
         onNextPage = { fcitx.launchOnReady { it.offsetCandidatePage(1) } }
@@ -160,8 +163,13 @@ class CandidatesView(
         } else {
             if (horizontal + selfWidth > parentWidth) parentWidth - selfWidth else horizontal
         }
-        val tY: Float =
-            if (bottom + selfHeight > parentHeight - bottomInsets) top - selfHeight else bottom
+        val bottomLimit = parentHeight - bottomInsets
+        val bottomSpace = bottomLimit - bottom
+        // move CandidatesView above cursor anchor, only when
+        val tY: Float = if (
+            bottom + selfHeight > bottomLimit   // bottom space is not enough
+            && top > bottomSpace                // top space is larger than bottom
+        ) top - selfHeight else bottom
         translationX = tX
         translationY = tY
         // update touchEventReceiverWindow's position after CandidatesView's
@@ -186,7 +194,13 @@ class CandidatesView(
 
         minWidth = dp(windowMinWidth)
         padding = dp(windowPadding)
-        backgroundColor = theme.backgroundColor
+        background = GradientDrawable().apply {
+            setColor(theme.backgroundColor)
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(windowRadius).toFloat()
+        }
+        clipToOutline = true
+        outlineProvider = ViewOutlineProvider.BACKGROUND
         add(preeditUi.root, lParams(wrapContent, wrapContent) {
             topOfParent()
             startOfParent()
@@ -211,13 +225,13 @@ class CandidatesView(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        candidatesUi.root.viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
+        viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
         viewTreeObserver.addOnPreDrawListener(preDrawListener)
     }
 
     override fun onDetachedFromWindow() {
         viewTreeObserver.removeOnPreDrawListener(preDrawListener)
-        candidatesUi.root.viewTreeObserver.removeOnGlobalLayoutListener(layoutListener)
+        viewTreeObserver.removeOnGlobalLayoutListener(layoutListener)
         touchEventReceiverWindow.dismiss()
         super.onDetachedFromWindow()
     }
